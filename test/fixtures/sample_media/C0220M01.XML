@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NonRealTimeMeta xmlns="urn:schemas-professionalDisc:nonRealTimeMeta:ver.2.20" xmlns:lib="urn:schemas-professionalDisc:lib:ver.2.10" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" lastUpdate="2025-12-24T23:08:42+09:00">
+	<TargetMaterial umidRef="060A2B340101010501010D431300000008FF9D02331006CC3490EAFFFEDFA705"/>
+	<Duration value="60"/>
+	<LtcChangeTable tcFps="24" halfStep="false">
+		<LtcChange frameCount="0" value="04171605" status="increment"/>
+		<LtcChange frameCount="59" value="15191605" status="end"/>
+	</LtcChangeTable>
+	<CreationDate value="2025-12-24T23:08:39+09:00"/>
+	<KlvPacketTable>
+		<KlvPacket key="060E2B34010101050301020A02000000" frameCount="0" lengthValue="095F5265635374617274" status="spot"/>
+	</KlvPacketTable>
+	<VideoFormat>
+		<VideoRecPort port="DIRECT"/>
+		<VideoFrame videoCodec="HEVC_3840_2160_M10P@L5HT" captureFps="23.98p" formatFps="23.98p"/>
+		<VideoLayout pixel="3840" numOfVerticalLine="2160" aspectRatio="16:9"/>
+	</VideoFormat>
+	<AudioFormat numOfChannel="2">
+		<AudioRecPort port="DIRECT" audioCodec="LPCM16" trackDst="CH1"/>
+		<AudioRecPort port="DIRECT" audioCodec="LPCM16" trackDst="CH2"/>
+	</AudioFormat>
+	<SubStream codec="HEVC_Proxy_1920_1080_M10P@L4MT"/>
+	<Device manufacturer="Sony" modelName="ILCE-6700" serialNo="4294967295"/>
+	<Lens modelName="E 18-135mm F3.5-5.6 OSS"/>
+	<RecordingMode type="normal" cacheRec="false"/>
+	<AcquisitionRecord>
+		<Group name="CameraUnitMetadataSet">
+			<Item name="CaptureGammaEquation" value="rec709"/>
+			<Item name="CaptureColorPrimaries" value="rec709"/>
+			<Item name="CodingEquations" value="rec709"/>
+		</Group>
+		<ChangeTable name="ImagerControlInformation">
+			<Event frameCount="0" status="start"/>
+		</ChangeTable>
+		<ChangeTable name="LensControlInformation">
+			<Event frameCount="0" status="start"/>
+		</ChangeTable>
+		<ChangeTable name="DistortionCorrection">
+			<Event frameCount="0" status="start"/>
+		</ChangeTable>
+		<ChangeTable name="Gyroscope">
+			<Event frameCount="0" status="start"/>
+		</ChangeTable>
+		<ChangeTable name="Accelerometor">
+			<Event frameCount="0" status="start"/>
+		</ChangeTable>
+	</AcquisitionRecord>
+</NonRealTimeMeta>
