@@ -209,8 +209,12 @@ class SonyFilesystemService {
 
   /// ディレクトリの内容を一覧取得（デバッグ用）
   Future<List<String>> _listDirectoryContents(String dirPath) async {
+    final dir = Directory(dirPath);
+    if (!await dir.exists()) {
+      return <String>[];
+    }
+
     try {
-      final dir = Directory(dirPath);
       final contents = <String>[];
       await for (final entity in dir.list()) {
         final name = p.basename(entity.path);
@@ -219,7 +223,12 @@ class SonyFilesystemService {
       }
       return contents;
     } catch (ex) {
-      return ['Error listing directory: $ex'];
+      _log.error(
+        'Failed to list directory contents: $dirPath.',
+        tag: 'SonyFilesystem',
+        error: ex,
+      );
+      rethrow;
     }
   }
 
@@ -229,6 +238,10 @@ class SonyFilesystemService {
     String targetName,
   ) async {
     final parentDir = Directory(parentPath);
+    if (!await parentDir.exists()) {
+      return null;
+    }
+
     final targetLower = targetName.toLowerCase();
 
     try {
@@ -247,6 +260,7 @@ class SonyFilesystemService {
         tag: 'SonyFilesystem',
         error: ex,
       );
+      rethrow;
     }
 
     return null;
@@ -256,6 +270,9 @@ class SonyFilesystemService {
   Future<List<String>> _findDcfFolders(String dcimPath) async {
     final folders = <String>[];
     final dcimDir = Directory(dcimPath);
+    if (!await dcimDir.exists()) {
+      return folders;
+    }
 
     try {
       await for (final entity in dcimDir.list()) {
@@ -274,7 +291,8 @@ class SonyFilesystemService {
         return aName.compareTo(bName);
       });
     } catch (ex) {
-      _log.warning('Error reading DCIM directory: $ex.', tag: 'SonyFilesystem');
+      _log.error('Failed to read DCIM directory: $dcimPath.', tag: 'SonyFilesystem', error: ex);
+      rethrow;
     }
 
     return folders;
@@ -546,14 +564,8 @@ class SonyFilesystemService {
   /// 取り込み元ファイルの作成・更新時刻を取得する
   Future<({int creationTimeUtcMs, int modifiedTimeUtcMs})> _getSourceFileTimes(
     File file,
-    FileStat stat,
   ) async {
-    try {
-      return await getFileTimes(file.path);
-    } catch (_) {
-      final fallbackUtc = stat.modified.toUtc().millisecondsSinceEpoch;
-      return (creationTimeUtcMs: fallbackUtc, modifiedTimeUtcMs: fallbackUtc);
-    }
+    return getFileTimes(file.path);
   }
 
   /// 作成日時と更新日時のうち古い方を取得する
@@ -661,6 +673,9 @@ class SonyFilesystemService {
   }) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
+    if (!await dir.exists()) {
+      throw FileSystemException('Photo folder not found.', folderPath);
+    }
 
     try {
       final entities = await dir.list().toList();
@@ -695,7 +710,11 @@ class SonyFilesystemService {
               files.add(mediaFile);
             }
           } else if (ext.isNotEmpty) {
-            await _addUnknownExtensionWarning(entity, warnings);
+            await _addUnknownExtensionWarning(
+              entity,
+              warnings,
+              cameraTimezone,
+            );
           }
 
           processedCount += 1;
@@ -713,10 +732,12 @@ class SonyFilesystemService {
         tag: 'SonyFilesystem',
       );
     } catch (ex) {
-      _log.warning(
-        'Error scanning photo folder: $folderPath. Reason: $ex.',
+      _log.error(
+        'Failed to scan photo folder: $folderPath.',
         tag: 'SonyFilesystem',
+        error: ex,
       );
+      rethrow;
     }
 
     return files;
@@ -733,6 +754,9 @@ class SonyFilesystemService {
   }) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
+    if (!await dir.exists()) {
+      throw FileSystemException('Video folder not found.', folderPath);
+    }
 
     try {
       final entities = await dir.list().toList();
@@ -781,7 +805,11 @@ class SonyFilesystemService {
               files.add(mediaFile);
             }
           } else if (!_metaExtensions.contains(ext) && ext.isNotEmpty) {
-            await _addUnknownExtensionWarning(entity, warnings);
+            await _addUnknownExtensionWarning(
+              entity,
+              warnings,
+              cameraTimezone,
+            );
           }
 
           processedCount += 1;
@@ -799,10 +827,12 @@ class SonyFilesystemService {
         tag: 'SonyFilesystem',
       );
     } catch (ex) {
-      _log.warning(
-        'Error scanning video folder: $folderPath. Reason: $ex.',
+      _log.error(
+        'Failed to scan video folder: $folderPath.',
         tag: 'SonyFilesystem',
+        error: ex,
       );
+      rethrow;
     }
 
     return files;
@@ -812,16 +842,21 @@ class SonyFilesystemService {
   Future<void> _addUnknownExtensionWarning(
     File file,
     List<ImportWarning> warnings,
+    String cameraTimezone,
   ) async {
     try {
       final fileName = p.basename(file.path);
       final extension = getExtension(fileName).toLowerCase();
       final baseName = getBaseName(fileName);
       final stat = await file.stat();
-      final sourceTimes = await _getSourceFileTimes(file, stat);
+      final sourceTimes = await _getSourceFileTimes(file);
       final relativePath = _getRelativePath(file.path);
       final referenceUtcMs = _getReferenceUtcMs(sourceTimes);
-      final captureLocalDateTime = DateTime.fromMillisecondsSinceEpoch(referenceUtcMs, isUtc: true).toLocal();
+      final captureLocalDateTime = _resolveCaptureLocalDateTime(
+        null,
+        referenceUtcMs,
+        cameraTimezone,
+      );
 
       final mediaFile = MediaFile(
         relativePath: relativePath,
@@ -848,7 +883,15 @@ class SonyFilesystemService {
           message: 'Unknown file extension: $extension.',
         ),
       );
-    } catch (_) {
+    } catch (ex) {
+      _log.warning(
+        'Failed to add unknown extension warning for: ${file.path}.',
+        tag: 'SonyFilesystem',
+        error: ex,
+      );
+      if (ex is FileSystemException || ex is UnsupportedError) {
+        rethrow;
+      }
       // 未知ファイルの警告追加に失敗した場合は無視する
     }
   }
@@ -879,7 +922,7 @@ class SonyFilesystemService {
       final stat = await file.stat();
       statStopwatch.stop();
       fileTimesStopwatch.start();
-      final sourceTimes = await _getSourceFileTimes(file, stat);
+      final sourceTimes = await _getSourceFileTimes(file);
       fileTimesStopwatch.stop();
       final referenceUtcMs = _getReferenceUtcMs(sourceTimes);
       final relativePath = _getRelativePath(file.path);
@@ -957,7 +1000,11 @@ class SonyFilesystemService {
       _log.warning(
         'Failed to create MediaFile for $filePath. Reason: $ex.',
         tag: 'SonyFilesystem',
+        error: ex,
       );
+      if (ex is FileSystemException || ex is UnsupportedError) {
+        rethrow;
+      }
       return null;
     } finally {
       stopwatch.stop();

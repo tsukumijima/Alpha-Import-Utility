@@ -131,7 +131,7 @@ class _ImportDialogState extends State<ImportDialog> {
         }
       },
       child: AlertDialog(
-        title: Text(_isImporting ? '取り込み中...' : '取り込み完了'),
+        title: Text(_getDialogTitle()),
         content: SizedBox(
           width: 500,
           child: _isImporting ? _buildProgress() : _buildResult(),
@@ -175,6 +175,24 @@ class _ImportDialogState extends State<ImportDialog> {
         // 結果サマリー
         ImportResultSummary(result: _result!),
 
+        // エラー理由（あれば）
+        if (_result!.errorMessage != null) ...[
+          const SizedBox(height: 16),
+          Text(
+            '中断理由',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _result!.errorMessage!,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
+
         // 警告一覧（あれば）
         if (_result!.warnings.isNotEmpty) ...[
           const SizedBox(height: 24),
@@ -182,6 +200,20 @@ class _ImportDialogState extends State<ImportDialog> {
         ],
       ],
     );
+  }
+
+  /// ダイアログタイトルを取得
+  String _getDialogTitle() {
+    if (_isImporting) {
+      return '取り込み中...';
+    }
+    if (_result?.wasCancelled == true) {
+      return '取り込み中断';
+    }
+    if ((_result?.errorCount ?? 0) > 0) {
+      return '取り込み中断';
+    }
+    return '取り込み完了';
   }
 
   /// 警告一覧を構築

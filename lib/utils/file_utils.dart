@@ -98,7 +98,16 @@ Future<void> restoreFileDateTime({
 Future<({int creationTimeUtcMs, int modifiedTimeUtcMs})> getFileTimes(
   String path,
 ) async {
-  return FileTimeService.instance.getFileTimes(path);
+  try {
+    return await FileTimeService.instance.getFileTimes(path);
+  } on MissingPluginException {
+    throw UnsupportedError('File time API is not available.');
+  } on PlatformException catch (ex) {
+    if (ex.code == 'NOT_IMPLEMENTED') {
+      throw UnsupportedError('File time API is not available.');
+    }
+    rethrow;
+  }
 }
 
 /// ファイルが書き込み中かどうかを判定する

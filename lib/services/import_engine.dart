@@ -254,7 +254,10 @@ class ImportEngine {
                   error: ex,
                   stackTrace: stackTrace,
                 );
-                throw Exception('Metadata update failed.');
+                throw ImportFatalException(
+                  'メタデータの更新に失敗したため取り込みを中断しました。',
+                  debugMessage: ex.toString(),
+                );
               }
               importedFiles.add(record);
             }
@@ -288,8 +291,9 @@ class ImportEngine {
     } catch (ex, stackTrace) {
       stopwatch.stop();
       _log.error('Import failed.', tag: 'ImportEngine', error: ex, stackTrace: stackTrace);
+      final errorMessage = _resolveFatalErrorMessage(ex);
       return ImportResult.error(
-        errorMessage: 'Import failed: $ex',
+        errorMessage: errorMessage,
         successCount: successCount,
         skippedCount: skippedCount,
         warnings: warnings,
@@ -409,6 +413,18 @@ class ImportEngine {
       await _copyFileWithHash(file, warnings, onCopyProgress: onCopyProgress);
 
       return _FileProcessResult.imported;
+    } on ImportFatalException {
+      rethrow;
+    } on FileSystemException catch (ex) {
+      _log.error(
+        'File system error detected, aborting import.',
+        tag: 'ImportEngine',
+        error: ex,
+      );
+      throw ImportFatalException(
+        'ファイルの読み書きに失敗したため取り込みを中断しました。ファイル: ${file.fileName}。',
+        debugMessage: ex.toString(),
+      );
     } on UnsupportedError {
       rethrow;
     } catch (ex) {
@@ -537,7 +553,9 @@ class ImportEngine {
               ),
             );
             await destFile.delete();
-            throw Exception('Hash verification failed');
+            throw ImportFatalException(
+              'ハッシュ検証に失敗したため取り込みを中断しました。ファイル: ${file.fileName}。',
+            );
           }
         }
 
@@ -570,6 +588,15 @@ class ImportEngine {
         // 成功
         _log.logFileCopied(file.relativePath, destPath);
         return;
+      } on ImportFatalException {
+        if (await destFile.exists()) {
+          try {
+            await destFile.delete();
+          } catch (_) {
+            // コピー失敗時の残骸削除に失敗しても中断を優先する
+          }
+        }
+        rethrow;
       } on UnsupportedError {
         if (await destFile.exists()) {
           try {
@@ -593,6 +620,36 @@ class ImportEngine {
         // リトライ
       }
     }
+  }
+
+  /// 中断理由をユーザー向けメッセージに変換する
+  String _resolveFatalErrorMessage(Object ex) {
+    if (ex is ImportFatalException) {
+      return ex.userMessage;
+    }
+    if (ex is UnsupportedError) {
+      return 'ファイル日時の取得または復元に必要なネイティブ API が利用できないため取り込みを中断しました。';
+    }
+    if (ex is FileSystemException) {
+      return 'ファイルの読み書きに失敗したため取り込みを中断しました。';
+    }
+    return '取り込み中にエラーが発生したため中断しました。';
+  }
+}
+
+/// 取り込み処理を中断するための致命的例外
+class ImportFatalException implements Exception {
+  /// ユーザー向けの中断理由
+  final String userMessage;
+
+  /// デバッグ用の詳細メッセージ
+  final String? debugMessage;
+
+  ImportFatalException(this.userMessage, {this.debugMessage});
+
+  @override
+  String toString() {
+    return debugMessage == null ? userMessage : '$userMessage ($debugMessage)';
   }
 }
 

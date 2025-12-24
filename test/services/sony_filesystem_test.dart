@@ -13,6 +13,7 @@ import 'package:alpha_import_utility/models/import_result.dart';
 import 'package:alpha_import_utility/models/settings.dart';
 import 'package:alpha_import_utility/services/sony_filesystem.dart';
 import 'package:alpha_import_utility/utils/exif_utils.dart';
+import 'package:alpha_import_utility/utils/timezone_utils.dart';
 import '../fixtures/test_helper.dart';
 
 void main() {
@@ -410,6 +411,45 @@ void main() {
             scanResult.warnings.where((w) => w.type == ImportWarningType.UnknownExtensionFound).length,
             equals(1),
           );
+        } finally {
+          await cleanup();
+        }
+      });
+
+      test('未知の拡張子のローカル日時は cameraTimezone を使用する', () async {
+        final (tempDir, cleanup) = await createTempDirectory();
+
+        try {
+          final modifiedTime = DateTime.utc(2025, 1, 1, 0, 0, 0);
+          await createMockSdCardStructure(
+            tempDir,
+            mockFiles: [
+              MockMediaFile.jpeg('DSC00001'),
+              MockMediaFile(
+                relativePath: 'DCIM/100MSDCF/DSC00002.AAA',
+                size: 1024,
+                modifiedTime: modifiedTime,
+              ),
+            ],
+          );
+          final service = SonyFilesystemService(tempDir);
+          final settings = ImportSettings.defaults().copyWith(
+            cameraTimezone: 'Asia/Tokyo',
+          );
+
+          final scanResult = await service.scanMediaFiles(settings);
+          final warning = scanResult.warnings.firstWhere(
+            (w) => w.type == ImportWarningType.UnknownExtensionFound,
+          );
+
+          final offset = getTimezoneOffsetDuration(settings.cameraTimezone);
+          expect(offset, isNotNull);
+          final expectedLocal = DateTime.fromMillisecondsSinceEpoch(
+            modifiedTime.millisecondsSinceEpoch,
+            isUtc: true,
+          ).add(offset!);
+
+          expect(warning.file.captureLocalDateTime, equals(expectedLocal));
         } finally {
           await cleanup();
         }
