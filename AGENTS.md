@@ -316,14 +316,14 @@ try {
 ### 編集後の必須コマンド
 
 ```bash
-# フォーマット
-dart format .
+# JSON シリアライズコードの再生成（.g.dart ファイル）
+dart run build_runner build --delete-conflicting-outputs
 
 # 静的解析
 flutter analyze
 
-# JSON シリアライズコードの再生成（.g.dart ファイル）
-dart run build_runner build --delete-conflicting-outputs
+# フォーマット (g.dart 生成後は必ず実行すること)
+dart format .
 ```
 
 ### テスト実行
