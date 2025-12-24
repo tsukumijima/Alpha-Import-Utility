@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "alpha_import_utility" "\0"
+            VALUE "FileDescription", "α Import Utility" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "alpha_import_utility" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "alpha_import_utility.exe" "\0"
-            VALUE "ProductName", "alpha_import_utility" "\0"
+            VALUE "InternalName", "α Import Utility" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2025 tsukumi. All rights reserved." "\0"
+            VALUE "OriginalFilename", "alpha-import-utility.exe" "\0"
+            VALUE "ProductName", "α Import Utility" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
