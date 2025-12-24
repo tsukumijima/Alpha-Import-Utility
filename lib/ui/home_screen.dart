@@ -98,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _log.warning('Selected folder is not a Sony SD card structure.', tag: 'HomeScreen');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('選択されたフォルダは Sony SD カード構造ではありません'),
+              content: Text('選択されたフォルダは Sony α カメラの SD カード構造として認識できませんでした。'),
             ),
           );
         }

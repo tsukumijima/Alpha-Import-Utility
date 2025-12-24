@@ -133,7 +133,7 @@ class DeviceCard extends StatelessWidget {
         if (!device.isSonyAlphaCard) ...[
           const SizedBox(height: 8),
           Text(
-            'Sony SD カード構造ではありません',
+            'このデバイスは Sony α カメラの SD カード構造として認識できませんでした。',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.error.withValues(alpha: 0.8),
             ),
