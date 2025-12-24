@@ -24,32 +24,21 @@ Future<String> computeFileHash(
   File file, {
   void Function(int bytesRead)? onProgress,
 }) async {
-  final fileSize = await file.length();
   int totalBytesRead = 0;
+  final hashState = xxh3Stream();
 
   // ファイルをストリームとして読み取り、チャンクごとにハッシュを更新
-  final chunks = <Uint8List>[];
-
   await for (final chunk in file.openRead()) {
-    chunks.add(Uint8List.fromList(chunk));
-    totalBytesRead += chunk.length;
+    final uint8Chunk = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+    hashState.update(uint8Chunk);
+    totalBytesRead += uint8Chunk.length;
 
     if (onProgress != null) {
       onProgress(totalBytesRead);
     }
   }
 
-  // 全データを結合してハッシュを計算
-  // xxh3 パッケージはストリーミング API を持たないため、一括計算
-  final allData = Uint8List(fileSize);
-  int offset = 0;
-  for (final chunk in chunks) {
-    allData.setRange(offset, offset + chunk.length, chunk);
-    offset += chunk.length;
-  }
-
-  final hashValue = xxh3(allData);
-  return hashValue.toRadixString(16).padLeft(16, '0');
+  return hashState.digestString().padLeft(16, '0');
 }
 
 /// バイトデータの xxHash64 を計算する
@@ -86,8 +75,8 @@ class StreamingCopyWithHash {
   /// コピー中に [onProgress] で進捗を通知する。
   /// コピー失敗時は例外をスローする。
   Future<String> execute() async {
-    final sourceSize = await source.length();
     int totalBytesCopied = 0;
+    final hashState = xxh3Stream();
 
     // コピー先ディレクトリを作成（存在しない場合）
     final destDir = destination.parent;
@@ -95,22 +84,18 @@ class StreamingCopyWithHash {
       await destDir.create(recursive: true);
     }
 
-    // ハッシュ計算用にデータを蓄積
-    final chunks = <Uint8List>[];
-
     // コピー先ファイルを開く
     final sink = destination.openWrite();
 
     try {
       await for (final chunk in source.openRead()) {
-        // チャンクを保存（ハッシュ計算用）
-        final uint8Chunk = Uint8List.fromList(chunk);
-        chunks.add(uint8Chunk);
+        final uint8Chunk = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
 
         // ファイルに書き込み
         sink.add(uint8Chunk);
+        hashState.update(uint8Chunk);
 
-        totalBytesCopied += chunk.length;
+        totalBytesCopied += uint8Chunk.length;
 
         if (onProgress != null) {
           onProgress!(totalBytesCopied);
@@ -122,16 +107,7 @@ class StreamingCopyWithHash {
       await sink.close();
     }
 
-    // ハッシュを計算
-    final allData = Uint8List(sourceSize);
-    int offset = 0;
-    for (final chunk in chunks) {
-      allData.setRange(offset, offset + chunk.length, chunk);
-      offset += chunk.length;
-    }
-
-    final hashValue = xxh3(allData);
-    return hashValue.toRadixString(16).padLeft(16, '0');
+    return hashState.digestString().padLeft(16, '0');
   }
 }
 
