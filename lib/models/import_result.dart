@@ -1,0 +1,447 @@
+/// 取り込み結果関連のモデル定義
+///
+/// 取り込み処理の結果、警告、エラーを保持する。
+library;
+
+import 'package:json_annotation/json_annotation.dart';
+import 'media_file.dart';
+
+part 'import_result.g.dart';
+
+/// 取り込み警告の種類
+enum ImportWarningType {
+  /// 同名だが内容が異なるファイルを別名で保存した
+  ///
+  /// 例: DSC00001.ARW → DSC00001 (1).ARW
+  DuplicateRenamed,
+
+  /// EXIF 読み取りに失敗した（ファイル日時を使用）
+  ExifReadFailed,
+
+  /// 日時復元に失敗した
+  DateRestoreFailed,
+
+  /// ハッシュ検証に失敗した（再コピーを実施）
+  HashVerificationFailed,
+
+  /// メタデータ更新をスキップした（SD カードが読み取り専用など）
+  MetadataUpdateSkipped,
+
+  /// 未知のファイル拡張子を検出した（取り込み対象外）
+  UnknownExtensionFound,
+
+  /// 書き込み中と思われるファイルをスキップした
+  FileInUseSkipped,
+}
+
+/// ImportWarningType の拡張メソッド
+extension ImportWarningTypeExtension on ImportWarningType {
+  /// 日本語での表示名
+  String get displayName {
+    switch (this) {
+      case ImportWarningType.DuplicateRenamed:
+        return '別名で保存';
+      case ImportWarningType.ExifReadFailed:
+        return 'EXIF 読み取り失敗';
+      case ImportWarningType.DateRestoreFailed:
+        return '日時復元失敗';
+      case ImportWarningType.HashVerificationFailed:
+        return 'ハッシュ検証失敗';
+      case ImportWarningType.MetadataUpdateSkipped:
+        return 'メタデータ更新スキップ';
+      case ImportWarningType.UnknownExtensionFound:
+        return '未知の拡張子';
+      case ImportWarningType.FileInUseSkipped:
+        return '使用中ファイルをスキップ';
+    }
+  }
+
+  /// 警告の重要度（高いほど重要）
+  int get severity {
+    switch (this) {
+      case ImportWarningType.HashVerificationFailed:
+        return 3; // 最重要：データ整合性に関わる
+      case ImportWarningType.DuplicateRenamed:
+        return 2; // 重要：ファイル名が変わった
+      case ImportWarningType.DateRestoreFailed:
+      case ImportWarningType.MetadataUpdateSkipped:
+        return 1; // 中程度：機能が一部動作しなかった
+      case ImportWarningType.ExifReadFailed:
+      case ImportWarningType.UnknownExtensionFound:
+      case ImportWarningType.FileInUseSkipped:
+        return 0; // 低：情報提供のみ
+    }
+  }
+}
+
+/// 取り込み警告を表すクラス
+class ImportWarning {
+  /// 警告の種類
+  final ImportWarningType type;
+
+  /// 対象ファイル
+  final MediaFile file;
+
+  /// 警告メッセージ（詳細情報）
+  final String message;
+
+  /// 発生日時
+  final DateTime timestamp;
+
+  ImportWarning({
+    required this.type,
+    required this.file,
+    required this.message,
+    DateTime? timestamp,
+  }) : timestamp = timestamp ?? DateTime.now();
+
+  @override
+  String toString() {
+    return 'ImportWarning(type: ${type.displayName}, file: ${file.fileName}, message: $message)';
+  }
+}
+
+/// SD カードに記録する取り込み済みファイルのレコード
+///
+/// PRIVATE/AIU/METADATA.JSON に保存される各ファイルの情報。
+@JsonSerializable()
+class ImportedFileRecord {
+  /// SD カード内の相対パス（例: 'DCIM/100MSDCF/DSC00001.ARW'）
+  final String sourcePath;
+
+  /// xxHash64 ハッシュ値（16 進数文字列）
+  final String xxHash;
+
+  /// ファイルサイズ（バイト）
+  final int fileSize;
+
+  /// 取り込み日時（UTC）
+  final DateTime importedAt;
+
+  /// コピー先パス（保存先フォルダからの相対パス）
+  ///
+  /// 例: '2025_12_24/DSC00001.ARW'
+  final String destinationPath;
+
+  /// 取り込み時のアプリバージョン
+  final String appVersion;
+
+  ImportedFileRecord({
+    required this.sourcePath,
+    required this.xxHash,
+    required this.fileSize,
+    required this.importedAt,
+    required this.destinationPath,
+    required this.appVersion,
+  });
+
+  /// JSON からデシリアライズ
+  factory ImportedFileRecord.fromJson(Map<String, dynamic> json) =>
+      _$ImportedFileRecordFromJson(json);
+
+  /// JSON にシリアライズ
+  Map<String, dynamic> toJson() => _$ImportedFileRecordToJson(this);
+
+  @override
+  String toString() {
+    return 'ImportedFileRecord(source: $sourcePath, dest: $destinationPath)';
+  }
+}
+
+/// SD カード上のメタデータファイルの内容
+///
+/// PRIVATE/AIU/METADATA.JSON のルートオブジェクト。
+@JsonSerializable()
+class ImportMetadata {
+  /// メタデータフォーマットのバージョン
+  final String version;
+
+  /// 最終更新日時（UTC）
+  final DateTime lastUpdated;
+
+  /// 取り込み済みファイルの一覧
+  final List<ImportedFileRecord> files;
+
+  ImportMetadata({
+    this.version = '1.0.0',
+    required this.lastUpdated,
+    required this.files,
+  });
+
+  /// 空のメタデータを作成
+  factory ImportMetadata.empty() {
+    return ImportMetadata(
+      lastUpdated: DateTime.now().toUtc(),
+      files: [],
+    );
+  }
+
+  /// JSON からデシリアライズ
+  factory ImportMetadata.fromJson(Map<String, dynamic> json) =>
+      _$ImportMetadataFromJson(json);
+
+  /// JSON にシリアライズ
+  Map<String, dynamic> toJson() => _$ImportMetadataToJson(this);
+
+  /// 指定したソースパスのレコードを検索
+  ///
+  /// 見つからない場合は null を返す
+  ImportedFileRecord? findBySourcePath(String sourcePath) {
+    try {
+      return files.firstWhere((record) => record.sourcePath == sourcePath);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 新しいレコードを追加したメタデータを返す
+  ImportMetadata addRecord(ImportedFileRecord record) {
+    return ImportMetadata(
+      version: version,
+      lastUpdated: DateTime.now().toUtc(),
+      files: [...files, record],
+    );
+  }
+
+  /// 複数のレコードを追加したメタデータを返す
+  ImportMetadata addRecords(List<ImportedFileRecord> newRecords) {
+    return ImportMetadata(
+      version: version,
+      lastUpdated: DateTime.now().toUtc(),
+      files: [...files, ...newRecords],
+    );
+  }
+
+  @override
+  String toString() {
+    return 'ImportMetadata(version: $version, files: ${files.length})';
+  }
+}
+
+/// 取り込み処理全体の結果
+class ImportResult {
+  /// 取り込み成功件数
+  final int successCount;
+
+  /// スキップ件数（取り込み済み）
+  final int skippedCount;
+
+  /// 警告件数
+  final int warningCount;
+
+  /// エラー件数
+  final int errorCount;
+
+  /// 警告の一覧
+  final List<ImportWarning> warnings;
+
+  /// 取り込んだファイルのレコード一覧
+  final List<ImportedFileRecord> importedFiles;
+
+  /// 処理時間
+  final Duration duration;
+
+  /// キャンセルされたかどうか
+  final bool wasCancelled;
+
+  /// エラーメッセージ（エラー終了時のみ）
+  final String? errorMessage;
+
+  ImportResult({
+    required this.successCount,
+    required this.skippedCount,
+    required this.warningCount,
+    required this.errorCount,
+    required this.warnings,
+    required this.importedFiles,
+    required this.duration,
+    this.wasCancelled = false,
+    this.errorMessage,
+  });
+
+  /// 空の結果を作成
+  factory ImportResult.empty() {
+    return ImportResult(
+      successCount: 0,
+      skippedCount: 0,
+      warningCount: 0,
+      errorCount: 0,
+      warnings: [],
+      importedFiles: [],
+      duration: Duration.zero,
+    );
+  }
+
+  /// キャンセル結果を作成
+  factory ImportResult.cancelled({
+    required int successCount,
+    required int skippedCount,
+    required List<ImportWarning> warnings,
+    required List<ImportedFileRecord> importedFiles,
+    required Duration duration,
+  }) {
+    return ImportResult(
+      successCount: successCount,
+      skippedCount: skippedCount,
+      warningCount: warnings.length,
+      errorCount: 0,
+      warnings: warnings,
+      importedFiles: importedFiles,
+      duration: duration,
+      wasCancelled: true,
+    );
+  }
+
+  /// エラー結果を作成
+  factory ImportResult.error({
+    required String errorMessage,
+    int successCount = 0,
+    int skippedCount = 0,
+    List<ImportWarning>? warnings,
+    List<ImportedFileRecord>? importedFiles,
+    Duration? duration,
+  }) {
+    return ImportResult(
+      successCount: successCount,
+      skippedCount: skippedCount,
+      warningCount: warnings?.length ?? 0,
+      errorCount: 1,
+      warnings: warnings ?? [],
+      importedFiles: importedFiles ?? [],
+      duration: duration ?? Duration.zero,
+      errorMessage: errorMessage,
+    );
+  }
+
+  /// 処理が正常に完了したか
+  bool get isSuccess => !wasCancelled && errorCount == 0;
+
+  /// 処理時間を人間が読みやすい形式で取得
+  String get formattedDuration {
+    if (duration.inHours > 0) {
+      return '${duration.inHours}時間${duration.inMinutes.remainder(60)}分';
+    } else if (duration.inMinutes > 0) {
+      return '${duration.inMinutes}分${duration.inSeconds.remainder(60)}秒';
+    } else {
+      return '${duration.inSeconds}秒';
+    }
+  }
+
+  /// 結果のサマリーを取得
+  String get summary {
+    final parts = <String>[];
+    if (successCount > 0) parts.add('成功: $successCount 件');
+    if (skippedCount > 0) parts.add('スキップ: $skippedCount 件');
+    if (warningCount > 0) parts.add('警告: $warningCount 件');
+    if (errorCount > 0) parts.add('エラー: $errorCount 件');
+    if (wasCancelled) parts.add('（キャンセル）');
+    return parts.join('、');
+  }
+
+  @override
+  String toString() {
+    return 'ImportResult($summary, duration: $formattedDuration)';
+  }
+}
+
+/// 取り込み進捗の状態
+class ImportProgress {
+  /// 現在処理中のファイル
+  final MediaFile? currentFile;
+
+  /// 処理済みファイル数
+  final int processedCount;
+
+  /// 総ファイル数
+  final int totalCount;
+
+  /// 現在のファイルのコピー進捗（0.0 〜 1.0）
+  final double currentFileProgress;
+
+  /// 現在のファイルのコピー済みバイト数
+  final int currentFileCopiedBytes;
+
+  /// 現在のファイルの総バイト数
+  final int currentFileTotalBytes;
+
+  /// 処理フェーズの説明
+  final String phase;
+
+  ImportProgress({
+    this.currentFile,
+    required this.processedCount,
+    required this.totalCount,
+    this.currentFileProgress = 0.0,
+    this.currentFileCopiedBytes = 0,
+    this.currentFileTotalBytes = 0,
+    this.phase = '',
+  });
+
+  /// 初期状態を作成
+  factory ImportProgress.initial() {
+    return ImportProgress(
+      processedCount: 0,
+      totalCount: 0,
+      phase: 'スキャン中...',
+    );
+  }
+
+  /// 全体の進捗率（0.0 〜 1.0）
+  double get overallProgress {
+    if (totalCount == 0) return 0.0;
+    return processedCount / totalCount;
+  }
+
+  /// 進捗テキスト（例: '15 / 128 枚'）
+  String get progressText {
+    if (totalCount == 0) return 'スキャン中...';
+    return '$processedCount / $totalCount 枚';
+  }
+
+  /// 新しいファイルの処理を開始
+  ImportProgress startFile(MediaFile file) {
+    return ImportProgress(
+      currentFile: file,
+      processedCount: processedCount,
+      totalCount: totalCount,
+      currentFileProgress: 0.0,
+      currentFileCopiedBytes: 0,
+      currentFileTotalBytes: file.fileSize,
+      phase: 'コピー中',
+    );
+  }
+
+  /// ファイルコピー進捗を更新
+  ImportProgress updateFileProgress(int copiedBytes) {
+    final progress = currentFileTotalBytes > 0
+        ? copiedBytes / currentFileTotalBytes
+        : 0.0;
+    return ImportProgress(
+      currentFile: currentFile,
+      processedCount: processedCount,
+      totalCount: totalCount,
+      currentFileProgress: progress,
+      currentFileCopiedBytes: copiedBytes,
+      currentFileTotalBytes: currentFileTotalBytes,
+      phase: phase,
+    );
+  }
+
+  /// ファイル処理完了
+  ImportProgress completeFile() {
+    return ImportProgress(
+      currentFile: null,
+      processedCount: processedCount + 1,
+      totalCount: totalCount,
+      currentFileProgress: 0.0,
+      currentFileCopiedBytes: 0,
+      currentFileTotalBytes: 0,
+      phase: phase,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'ImportProgress($progressText, phase: $phase)';
+  }
+}
