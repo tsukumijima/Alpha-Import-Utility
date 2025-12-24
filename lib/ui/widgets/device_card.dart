@@ -62,10 +62,10 @@ class DeviceCard extends StatelessWidget {
     Color iconColor;
 
     switch (device.type) {
-      case DeviceType.SdCard:
+      case DeviceType.SDCard:
         icon = Icons.sd_card;
         break;
-      case DeviceType.UsbStorage:
+      case DeviceType.USBStorage:
         icon = Icons.usb;
         break;
       case DeviceType.LocalFolder:
@@ -121,10 +121,10 @@ class DeviceCard extends StatelessWidget {
         ),
 
         // 容量情報（取得できた場合のみ）
-        if (device.formattedSize != null) ...[
+        if (device.formattedSizeDetail != null) ...[
           const SizedBox(height: 4),
           Text(
-            device.formattedSize!,
+            device.formattedSizeDetail!,
             style: theme.textTheme.bodySmall?.copyWith(color: textColor.withValues(alpha: 0.7)),
           ),
         ],

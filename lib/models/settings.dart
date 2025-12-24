@@ -1,7 +1,6 @@
 /// 設定関連のモデル定義
 ///
 /// 取り込み設定やアプリケーション設定を保持する。
-/// SharedPreferences での永続化に対応する。
 library;
 
 import 'package:json_annotation/json_annotation.dart';
@@ -80,9 +79,7 @@ extension DateFormatStyleExtension on DateFormatStyle {
   /// [year], [month], [day] を指定された [separator] で結合する
   String formatDate(int year, int month, int day, DateSeparator separator) {
     final sep = separator.character;
-    final yearStr = this == DateFormatStyle.YYYYMMDD
-        ? year.toString()
-        : (year % 100).toString().padLeft(2, '0');
+    final yearStr = this == DateFormatStyle.YYYYMMDD ? year.toString() : (year % 100).toString().padLeft(2, '0');
     final monthStr = month.toString().padLeft(2, '0');
     final dayStr = day.toString().padLeft(2, '0');
 
@@ -132,7 +129,6 @@ extension DateSeparatorExtension on DateSeparator {
 /// 取り込み設定を保持するクラス
 ///
 /// ユーザーが設定する取り込み動作のパラメータ。
-/// SharedPreferences で永続化される。
 @JsonSerializable()
 class ImportSettings {
   /// 保存先ベースフォルダ
@@ -150,23 +146,21 @@ class ImportSettings {
   /// 日付の区切り文字
   final DateSeparator dateSeparator;
 
-  /// カメラのタイムゾーン（IANA 形式、例: 'Asia/Tokyo'）
-  ///
-  /// カメラ内部時刻がどのタイムゾーンで記録されているかを指定する。
-  /// 通常はカメラの設定と一致させる。
-  final String cameraTimezone;
-
   /// EXIF からファイル日時を復元するか
   ///
-  /// true の場合、コピー後のファイルの作成日時・更新日時を
-  /// EXIF の撮影日時に合わせる。
+  /// true の場合、コピー後のファイルの作成日時・更新日時を EXIF の撮影日時に合わせる。
   final bool isRestoreDateTimeFromExif;
 
   /// 日時復元の許容誤差（秒）
   ///
-  /// ファイル日時と EXIF 日時の差がこの秒数以内であれば
-  /// 復元済みとみなしてスキップする。
+  /// ファイル日時と EXIF 日時の差がこの秒数以内であれば復元済みとみなしてスキップする。
   final int dateRestoreToleranceSeconds;
+
+  /// カメラのタイムゾーン（IANA 形式、例: 'Asia/Tokyo'）
+  ///
+  /// カメラ内部時刻がどのタイムゾーンで記録されているかを指定する。
+  /// 通常はカメラの設定と一致させるべき。
+  final String cameraTimezone;
 
   /// 動画 XML ファイルを取り込むか
   ///
@@ -185,10 +179,10 @@ class ImportSettings {
     this.subfolderPattern = SubfolderPattern.DateOnly,
     this.dateFormat = DateFormatStyle.YYYYMMDD,
     this.dateSeparator = DateSeparator.Underscore,
-    this.cameraTimezone = 'Asia/Tokyo',
     this.isRestoreDateTimeFromExif = true,
     this.dateRestoreToleranceSeconds = 30,
-    this.isImportVideoXML = false,
+    this.cameraTimezone = 'Asia/Tokyo',
+    this.isImportVideoXML = true,
     this.isImportProxyVideos = true,
   });
 
@@ -200,8 +194,7 @@ class ImportSettings {
   }
 
   /// JSON からデシリアライズ
-  factory ImportSettings.fromJson(Map<String, dynamic> json) =>
-      _$ImportSettingsFromJson(json);
+  factory ImportSettings.fromJson(Map<String, dynamic> json) => _$ImportSettingsFromJson(json);
 
   /// JSON にシリアライズ
   Map<String, dynamic> toJson() => _$ImportSettingsToJson(this);
@@ -212,9 +205,9 @@ class ImportSettings {
     SubfolderPattern? subfolderPattern,
     DateFormatStyle? dateFormat,
     DateSeparator? dateSeparator,
-    String? cameraTimezone,
     bool? isRestoreDateTimeFromExif,
     int? dateRestoreToleranceSeconds,
+    String? cameraTimezone,
     bool? isImportVideoXML,
     bool? isImportProxyVideos,
   }) {
@@ -223,11 +216,9 @@ class ImportSettings {
       subfolderPattern: subfolderPattern ?? this.subfolderPattern,
       dateFormat: dateFormat ?? this.dateFormat,
       dateSeparator: dateSeparator ?? this.dateSeparator,
+      isRestoreDateTimeFromExif: isRestoreDateTimeFromExif ?? this.isRestoreDateTimeFromExif,
+      dateRestoreToleranceSeconds: dateRestoreToleranceSeconds ?? this.dateRestoreToleranceSeconds,
       cameraTimezone: cameraTimezone ?? this.cameraTimezone,
-      isRestoreDateTimeFromExif:
-          isRestoreDateTimeFromExif ?? this.isRestoreDateTimeFromExif,
-      dateRestoreToleranceSeconds:
-          dateRestoreToleranceSeconds ?? this.dateRestoreToleranceSeconds,
       isImportVideoXML: isImportVideoXML ?? this.isImportVideoXML,
       isImportProxyVideos: isImportProxyVideos ?? this.isImportProxyVideos,
     );
@@ -285,8 +276,8 @@ class WindowSettings {
   final bool isMaximized;
 
   WindowSettings({
-    this.width = 800,
-    this.height = 600,
+    this.width = 640,
+    this.height = 700,
     this.positionX,
     this.positionY,
     this.isMaximized = false,
@@ -298,8 +289,7 @@ class WindowSettings {
   }
 
   /// JSON からデシリアライズ
-  factory WindowSettings.fromJson(Map<String, dynamic> json) =>
-      _$WindowSettingsFromJson(json);
+  factory WindowSettings.fromJson(Map<String, dynamic> json) => _$WindowSettingsFromJson(json);
 
   /// JSON にシリアライズ
   Map<String, dynamic> toJson() => _$WindowSettingsToJson(this);

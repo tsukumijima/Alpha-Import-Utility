@@ -12,6 +12,7 @@ import '../models/media_file.dart';
 import '../models/settings.dart';
 import '../utils/exif_utils.dart';
 import '../utils/file_utils.dart';
+import 'logging_service.dart';
 
 /// Sony SD カード構造の検証結果
 class SonyFilesystemValidation {
@@ -21,8 +22,11 @@ class SonyFilesystemValidation {
   /// DCIM フォルダが存在するか
   final bool hasDcimFolder;
 
-  /// MSDCF パターンのフォルダが存在するか
-  final bool hasMsdcfFolder;
+  /// DCF フォルダ（3桁番号 + 5文字のサフィックス）が存在するか
+  ///
+  /// Sony カメラのデフォルトは "xxxMSDCF" だが、ユーザーがカスタマイズ可能。
+  /// 日付形式の場合は "xxx10405" のように数字5桁になる。
+  final bool hasDcfFolder;
 
   /// PRIVATE/M4ROOT/CLIP フォルダが存在するか
   final bool hasClipFolder;
@@ -30,28 +34,28 @@ class SonyFilesystemValidation {
   /// エラーメッセージ（検証失敗時のみ）
   final String? errorMessage;
 
-  /// 検出された MSDCF フォルダの一覧
-  final List<String> msdcfFolders;
+  /// 検出された DCF フォルダの一覧
+  final List<String> dcfFolders;
 
   SonyFilesystemValidation({
     required this.isValid,
     required this.hasDcimFolder,
-    required this.hasMsdcfFolder,
+    required this.hasDcfFolder,
     required this.hasClipFolder,
     this.errorMessage,
-    this.msdcfFolders = const [],
+    this.dcfFolders = const [],
   });
 
   /// 成功の検証結果を作成
   factory SonyFilesystemValidation.success({
-    required List<String> msdcfFolders,
+    required List<String> dcfFolders,
   }) {
     return SonyFilesystemValidation(
       isValid: true,
       hasDcimFolder: true,
-      hasMsdcfFolder: true,
+      hasDcfFolder: true,
       hasClipFolder: true,
-      msdcfFolders: msdcfFolders,
+      dcfFolders: dcfFolders,
     );
   }
 
@@ -59,13 +63,13 @@ class SonyFilesystemValidation {
   factory SonyFilesystemValidation.failure({
     required String errorMessage,
     bool hasDcimFolder = false,
-    bool hasMsdcfFolder = false,
+    bool hasDcfFolder = false,
     bool hasClipFolder = false,
   }) {
     return SonyFilesystemValidation(
       isValid: false,
       hasDcimFolder: hasDcimFolder,
-      hasMsdcfFolder: hasMsdcfFolder,
+      hasDcfFolder: hasDcfFolder,
       hasClipFolder: hasClipFolder,
       errorMessage: errorMessage,
     );
@@ -77,10 +81,23 @@ class SonyFilesystemService {
   /// SD カードのルートパス
   final String rootPath;
 
+  /// ロガー
+  final _log = LoggingService.instance;
+
   SonyFilesystemService(this.rootPath);
 
-  /// MSDCF フォルダ名のパターン（例: 100MSDCF, 101MSDCF）
-  static final RegExp _msdcfPattern = RegExp(r'^\d{3}MSDCF$', caseSensitive: false);
+  /// DCF フォルダ名のパターン
+  ///
+  /// Sony カメラでは以下の形式が使用される:
+  /// - 標準形式: 3桁番号 + 5文字のサフィックス（例: 100MSDCF, 100ALPHA）
+  /// - 日付形式: 3桁番号 + 5桁の日付（例: 10010405 = 100番 + 04月05日）
+  ///
+  /// サフィックスはカメラ設定でカスタマイズ可能なため、
+  /// 3桁番号 + 任意の5文字（英数字・アンダースコア）にマッチさせる。
+  static final RegExp _dcfFolderPattern = RegExp(
+    r'^\d{3}[A-Z0-9_]{5}$',
+    caseSensitive: false,
+  );
 
   /// 取り込み対象の静止画拡張子
   static const Set<String> _photoExtensions = {'.jpg', '.jpeg', '.arw', '.hif', '.heif'};
@@ -95,12 +112,15 @@ class SonyFilesystemService {
   ///
   /// 以下の条件を全て満たす場合に有効と判定する:
   /// 1. DCIM/ フォルダが存在する
-  /// 2. DCIM/ 配下に [0-9]{3}MSDCF パターンのフォルダが 1 つ以上存在する
+  /// 2. DCIM/ 配下に DCF 形式（3桁番号 + 5文字）のフォルダが 1 つ以上存在する
   /// 3. PRIVATE/M4ROOT/CLIP/ フォルダが存在する
   Future<SonyFilesystemValidation> validate() async {
+    _log.debug('Starting Sony SD card validation for: $rootPath.', tag: 'SonyFilesystem');
+
     final rootDir = Directory(rootPath);
 
     if (!await rootDir.exists()) {
+      _log.warning('Validation failed: Root path does not exist: $rootPath.', tag: 'SonyFilesystem');
       return SonyFilesystemValidation.failure(
         errorMessage: 'Root path does not exist: $rootPath',
       );
@@ -109,49 +129,82 @@ class SonyFilesystemService {
     // DCIM フォルダの確認（大文字小文字非依存）
     final dcimPath = await _findCaseInsensitiveDirectory(rootPath, 'DCIM');
     if (dcimPath == null) {
+      _log.debug('Validation failed: DCIM folder not found in $rootPath.', tag: 'SonyFilesystem');
       return SonyFilesystemValidation.failure(
         errorMessage: 'DCIM folder not found',
       );
     }
+    _log.debug('Found DCIM folder: $dcimPath.', tag: 'SonyFilesystem');
 
-    // MSDCF パターンフォルダの確認
-    final msdcfFolders = await _findMsdcfFolders(dcimPath);
-    if (msdcfFolders.isEmpty) {
+    // DCF フォルダの確認（3桁番号 + 5文字のサフィックス）
+    final dcfFolders = await _findDcfFolders(dcimPath);
+    if (dcfFolders.isEmpty) {
+      // DCIM 内のフォルダ一覧をログに出力（デバッグ用）
+      final dcimContents = await _listDirectoryContents(dcimPath);
+      _log.warning(
+        'Validation failed: No DCF folder (3-digit number + 5-char suffix) found in DCIM. '
+        'Contents: $dcimContents.',
+        tag: 'SonyFilesystem',
+      );
       return SonyFilesystemValidation.failure(
-        errorMessage: 'No xxxMSDCF folder found in DCIM',
+        errorMessage: 'No DCF folder found in DCIM (expected format: 100XXXXX)',
         hasDcimFolder: true,
       );
     }
+    _log.debug(
+      'Found ${dcfFolders.length} DCF folder(s): ${dcfFolders.map((f) => p.basename(f)).join(", ")}.',
+      tag: 'SonyFilesystem',
+    );
 
     // PRIVATE/M4ROOT/CLIP フォルダの確認
     final privatePath = await _findCaseInsensitiveDirectory(rootPath, 'PRIVATE');
     if (privatePath == null) {
+      _log.debug('Validation failed: PRIVATE folder not found in $rootPath.', tag: 'SonyFilesystem');
       return SonyFilesystemValidation.failure(
         errorMessage: 'PRIVATE folder not found',
         hasDcimFolder: true,
-        hasMsdcfFolder: true,
+        hasDcfFolder: true,
       );
     }
 
     final m4rootPath = await _findCaseInsensitiveDirectory(privatePath, 'M4ROOT');
     if (m4rootPath == null) {
+      _log.debug('Validation failed: M4ROOT folder not found in $privatePath.', tag: 'SonyFilesystem');
       return SonyFilesystemValidation.failure(
         errorMessage: 'PRIVATE/M4ROOT folder not found',
         hasDcimFolder: true,
-        hasMsdcfFolder: true,
+        hasDcfFolder: true,
       );
     }
 
     final clipPath = await _findCaseInsensitiveDirectory(m4rootPath, 'CLIP');
     if (clipPath == null) {
+      _log.debug('Validation failed: CLIP folder not found in $m4rootPath.', tag: 'SonyFilesystem');
       return SonyFilesystemValidation.failure(
         errorMessage: 'PRIVATE/M4ROOT/CLIP folder not found',
         hasDcimFolder: true,
-        hasMsdcfFolder: true,
+        hasDcfFolder: true,
       );
     }
 
-    return SonyFilesystemValidation.success(msdcfFolders: msdcfFolders);
+    _log.info('Sony SD card validation successful: $rootPath.', tag: 'SonyFilesystem');
+    return SonyFilesystemValidation.success(dcfFolders: dcfFolders);
+  }
+
+  /// ディレクトリの内容を一覧取得（デバッグ用）
+  Future<List<String>> _listDirectoryContents(String dirPath) async {
+    try {
+      final dir = Directory(dirPath);
+      final contents = <String>[];
+      await for (final entity in dir.list()) {
+        final name = p.basename(entity.path);
+        final type = entity is Directory ? 'dir' : 'file';
+        contents.add('$name ($type)');
+      }
+      return contents;
+    } catch (ex) {
+      return ['Error listing directory: $ex'];
+    }
   }
 
   /// 大文字小文字を区別せずにディレクトリを検索
@@ -171,15 +224,20 @@ class SonyFilesystemService {
           }
         }
       }
-    } catch (_) {
-      // ディレクトリ読み取りエラー
+    } catch (ex) {
+      // ディレクトリ読み取りエラー（権限不足など）
+      _log.error(
+        'Failed to list directory: $parentPath (looking for $targetName).',
+        tag: 'SonyFilesystem',
+        error: ex,
+      );
     }
 
     return null;
   }
 
-  /// MSDCF パターンに一致するフォルダを検索
-  Future<List<String>> _findMsdcfFolders(String dcimPath) async {
+  /// DCF フォルダパターン（3桁番号 + 5文字）に一致するフォルダを検索
+  Future<List<String>> _findDcfFolders(String dcimPath) async {
     final folders = <String>[];
     final dcimDir = Directory(dcimPath);
 
@@ -187,20 +245,20 @@ class SonyFilesystemService {
       await for (final entity in dcimDir.list()) {
         if (entity is Directory) {
           final name = p.basename(entity.path);
-          if (_msdcfPattern.hasMatch(name)) {
+          if (_dcfFolderPattern.hasMatch(name)) {
             folders.add(entity.path);
           }
         }
       }
 
-      // フォルダ番号順にソート（100MSDCF, 101MSDCF, ...）
+      // フォルダ番号順にソート（100MSDCF, 101ALPHA, ...）
       folders.sort((a, b) {
         final aName = p.basename(a).toUpperCase();
         final bName = p.basename(b).toUpperCase();
         return aName.compareTo(bName);
       });
-    } catch (_) {
-      // ディレクトリ読み取りエラー
+    } catch (ex) {
+      _log.warning('Error reading DCIM directory: $ex.', tag: 'SonyFilesystem');
     }
 
     return folders;
@@ -224,8 +282,8 @@ class SonyFilesystemService {
     final mediaFiles = <MediaFile>[];
 
     // 1. DCIM フォルダ内の静止画をスキャン
-    for (final msdcfPath in validation.msdcfFolders) {
-      final photos = await _scanPhotosInFolder(msdcfPath);
+    for (final dcfPath in validation.dcfFolders) {
+      final photos = await _scanPhotosInFolder(dcfPath);
       mediaFiles.addAll(photos);
     }
 

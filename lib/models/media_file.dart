@@ -9,13 +9,13 @@ library;
 /// 取り込み処理やサブフォルダ分類に使用される。
 enum MediaType {
   /// JPEG 静止画（.JPG, .JPEG）
-  JpegPhoto,
+  JPEGPhoto,
 
   /// RAW 静止画（.ARW）- Sony 独自の RAW フォーマット
-  RawPhoto,
+  RAWPhoto,
 
   /// HEIF 静止画（.HIF, .HEIF）
-  HeifPhoto,
+  HEIFPhoto,
 
   /// 本編動画（.MP4）- PRIVATE/M4ROOT/CLIP/ に格納
   Video,
@@ -36,18 +36,21 @@ extension MediaTypeExtension on MediaType {
   /// [extension] はドットを含む拡張子（例: '.ARW', '.jpg'）
   /// [isProxyFolder] が true の場合、MP4 は ProxyVideo として扱う
   /// 該当しない場合は null を返す
-  static MediaType? fromExtension(String extension, {bool isProxyFolder = false}) {
+  static MediaType? fromExtension(
+    String extension, {
+    bool isProxyFolder = false,
+  }) {
     final lowerExt = extension.toLowerCase();
 
     switch (lowerExt) {
       case '.jpg':
       case '.jpeg':
-        return MediaType.JpegPhoto;
+        return MediaType.JPEGPhoto;
       case '.arw':
-        return MediaType.RawPhoto;
+        return MediaType.RAWPhoto;
       case '.hif':
       case '.heif':
-        return MediaType.HeifPhoto;
+        return MediaType.HEIFPhoto;
       case '.mp4':
         return isProxyFolder ? MediaType.ProxyVideo : MediaType.Video;
       case '.xml':
@@ -59,9 +62,7 @@ extension MediaTypeExtension on MediaType {
 
   /// 静止画かどうか
   bool get isPhoto {
-    return this == MediaType.JpegPhoto ||
-        this == MediaType.RawPhoto ||
-        this == MediaType.HeifPhoto;
+    return this == MediaType.JPEGPhoto || this == MediaType.RAWPhoto || this == MediaType.HEIFPhoto;
   }
 
   /// 動画かどうか（プロキシ含む）
@@ -72,11 +73,11 @@ extension MediaTypeExtension on MediaType {
   /// 日本語での表示名
   String get displayName {
     switch (this) {
-      case MediaType.JpegPhoto:
+      case MediaType.JPEGPhoto:
         return 'JPEG 写真';
-      case MediaType.RawPhoto:
+      case MediaType.RAWPhoto:
         return 'RAW 写真';
-      case MediaType.HeifPhoto:
+      case MediaType.HEIFPhoto:
         return 'HEIF 写真';
       case MediaType.Video:
         return '動画';
@@ -192,9 +193,7 @@ class MediaFile {
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is MediaFile &&
-        other.relativePath == relativePath &&
-        other.sdCardRoot == sdCardRoot;
+    return other is MediaFile && other.relativePath == relativePath && other.sdCardRoot == sdCardRoot;
   }
 
   @override

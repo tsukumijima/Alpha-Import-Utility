@@ -129,7 +129,10 @@ class ImportEngine {
       _log.debug('Phase 4: Checking disk space.', tag: 'ImportEngine');
       final totalSize = mediaFiles.fold<int>(0, (sum, f) => sum + f.fileSize);
       final availableSpace = await getAvailableDiskSpace(settings.destinationFolder);
-      _log.debug('Required: ${formatFileSize(totalSize)}, Available: ${availableSpace != null ? formatFileSize(availableSpace) : "unknown"}.', tag: 'ImportEngine');
+      _log.debug(
+        'Required: ${formatFileSize(totalSize)}, Available: ${availableSpace != null ? formatFileSize(availableSpace) : "unknown"}.',
+        tag: 'ImportEngine',
+      );
 
       if (availableSpace != null && availableSpace < totalSize) {
         _log.error('Insufficient disk space.', tag: 'ImportEngine');
@@ -144,11 +147,13 @@ class ImportEngine {
 
       // Phase 5: 各ファイルの取り込み処理
       _log.debug('Phase 5: Starting file import.', tag: 'ImportEngine');
-      _notifyProgress(ImportProgress(
-        processedCount: 0,
-        totalCount: mediaFiles.length,
-        phase: 'Importing...',
-      ));
+      _notifyProgress(
+        ImportProgress(
+          processedCount: 0,
+          totalCount: mediaFiles.length,
+          phase: 'Importing...',
+        ),
+      );
 
       for (var index = 0; index < mediaFiles.length; index++) {
         // キャンセルチェック
@@ -165,12 +170,14 @@ class ImportEngine {
         final mediaFile = mediaFiles[index];
 
         // 進捗通知
-        _notifyProgress(ImportProgress(
-          currentFile: mediaFile,
-          processedCount: index,
-          totalCount: mediaFiles.length,
-          phase: 'Importing...',
-        ).startFile(mediaFile));
+        _notifyProgress(
+          ImportProgress(
+            currentFile: mediaFile,
+            processedCount: index,
+            totalCount: mediaFiles.length,
+            phase: 'Importing...',
+          ).startFile(mediaFile),
+        );
 
         // 取り込み判定と処理
         final result = await _processFile(mediaFile, warnings);
@@ -201,11 +208,13 @@ class ImportEngine {
         }
 
         // ファイル完了の進捗通知
-        _notifyProgress(ImportProgress(
-          processedCount: index + 1,
-          totalCount: mediaFiles.length,
-          phase: 'Importing...',
-        ));
+        _notifyProgress(
+          ImportProgress(
+            processedCount: index + 1,
+            totalCount: mediaFiles.length,
+            phase: 'Importing...',
+          ),
+        );
       }
 
       stopwatch.stop();
@@ -254,11 +263,13 @@ class ImportEngine {
       // 書き込み中ファイルのチェック
       final sourceFile = File(file.absolutePath);
       if (await isFileBeingWritten(sourceFile)) {
-        warnings.add(ImportWarning(
-          type: ImportWarningType.FileInUseSkipped,
-          file: file,
-          message: 'File appears to be in use, skipping',
-        ));
+        warnings.add(
+          ImportWarning(
+            type: ImportWarningType.FileInUseSkipped,
+            file: file,
+            message: 'File appears to be in use, skipping',
+          ),
+        );
         return _FileProcessResult.skipped;
       }
 
@@ -304,11 +315,13 @@ class ImportEngine {
 
       return _FileProcessResult.imported;
     } catch (ex) {
-      warnings.add(ImportWarning(
-        type: ImportWarningType.HashVerificationFailed,
-        file: file,
-        message: 'Failed to process file: $ex',
-      ));
+      warnings.add(
+        ImportWarning(
+          type: ImportWarningType.HashVerificationFailed,
+          file: file,
+          message: 'Failed to process file: $ex',
+        ),
+      );
       return _FileProcessResult.error;
     }
   }
@@ -346,13 +359,14 @@ class ImportEngine {
     destFileName = await generateUniqueFileName(Directory(destFolder), destFileName);
 
     // 元のファイル名と異なる場合は警告を記録
-    if (destFileName != file.fileName &&
-        !(file.type == MediaType.ProxyVideo && destFileName.contains('_proxy'))) {
-      warnings.add(ImportWarning(
-        type: ImportWarningType.DuplicateRenamed,
-        file: file,
-        message: 'Renamed to $destFileName due to existing file',
-      ));
+    if (destFileName != file.fileName && !(file.type == MediaType.ProxyVideo && destFileName.contains('_proxy'))) {
+      warnings.add(
+        ImportWarning(
+          type: ImportWarningType.DuplicateRenamed,
+          file: file,
+          message: 'Renamed to $destFileName due to existing file',
+        ),
+      );
     }
 
     final destPath = p.join(destFolder, destFileName);
@@ -383,11 +397,13 @@ class ImportEngine {
             continue;
           } else {
             // 最大リトライ回数に達した
-            warnings.add(ImportWarning(
-              type: ImportWarningType.HashVerificationFailed,
-              file: file,
-              message: 'Hash verification failed after $attempt attempts',
-            ));
+            warnings.add(
+              ImportWarning(
+                type: ImportWarningType.HashVerificationFailed,
+                file: file,
+                message: 'Hash verification failed after $attempt attempts',
+              ),
+            );
             await destFile.delete();
             throw Exception('Hash verification failed');
           }
@@ -398,11 +414,13 @@ class ImportEngine {
           try {
             await restoreFileDateTime(destFile, file.effectiveDateTime);
           } catch (_) {
-            warnings.add(ImportWarning(
-              type: ImportWarningType.DateRestoreFailed,
-              file: file,
-              message: 'Failed to restore file datetime',
-            ));
+            warnings.add(
+              ImportWarning(
+                type: ImportWarningType.DateRestoreFailed,
+                file: file,
+                message: 'Failed to restore file datetime',
+              ),
+            );
           }
         }
 

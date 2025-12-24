@@ -177,22 +177,23 @@ ThemeData getAppTheme() {
     ),
 
     // テキストテーマ
+    // height は line-height の設定。1.5 は 150% を意味する。
     textTheme: const TextTheme(
-      displayLarge: TextStyle(fontSize: 57, fontWeight: FontWeight.bold, color: Colors.white),
-      displayMedium: TextStyle(fontSize: 45, fontWeight: FontWeight.bold, color: Colors.white),
-      displaySmall: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
-      headlineLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.w600, color: Colors.white),
-      headlineMedium: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: Colors.white),
-      headlineSmall: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: Colors.white),
-      titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w500, color: Colors.white),
-      titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white),
-      titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
-      bodyLarge: TextStyle(fontSize: 16, color: Colors.white),
-      bodyMedium: TextStyle(fontSize: 14, color: Colors.white),
-      bodySmall: TextStyle(fontSize: 12, color: Colors.white70),
-      labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
-      labelMedium: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white),
-      labelSmall: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70),
+      displayLarge: TextStyle(fontSize: 57, fontWeight: FontWeight.bold, color: Colors.white, height: 1.3),
+      displayMedium: TextStyle(fontSize: 45, fontWeight: FontWeight.bold, color: Colors.white, height: 1.3),
+      displaySmall: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white, height: 1.3),
+      headlineLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.w600, color: Colors.white, height: 1.4),
+      headlineMedium: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: Colors.white, height: 1.4),
+      headlineSmall: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: Colors.white, height: 1.4),
+      titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w500, color: Colors.white, height: 1.4),
+      titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white, height: 1.5),
+      titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white, height: 1.5),
+      bodyLarge: TextStyle(fontSize: 16, color: Colors.white, height: 1.6),
+      bodyMedium: TextStyle(fontSize: 14, color: Colors.white, height: 1.6),
+      bodySmall: TextStyle(fontSize: 12, color: Colors.white70, height: 1.6),
+      labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white, height: 1.5),
+      labelMedium: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white, height: 1.5),
+      labelSmall: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70, height: 1.5),
     ),
   );
 }

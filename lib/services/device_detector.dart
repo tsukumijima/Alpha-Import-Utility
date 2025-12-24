@@ -23,6 +23,9 @@ class DetectedDevice {
   /// デバイスの総容量（バイト）
   final int? totalSize;
 
+  /// デバイスの使用済み容量（バイト）
+  final int? usedSize;
+
   /// デバイスの空き容量（バイト）
   final int? freeSize;
 
@@ -36,6 +39,7 @@ class DetectedDevice {
     required this.mountPoint,
     this.name,
     this.totalSize,
+    this.usedSize,
     this.freeSize,
     required this.isSonyAlphaCard,
     required this.type,
@@ -56,7 +60,7 @@ class DetectedDevice {
     }
   }
 
-  /// 容量情報を人間が読みやすい形式で取得
+  /// 容量情報を人間が読みやすい形式で取得（全体容量のみ）
   String? get formattedSize {
     if (totalSize == null) return null;
     return _formatBytes(totalSize!);
@@ -66,6 +70,27 @@ class DetectedDevice {
   String? get formattedFreeSize {
     if (freeSize == null) return null;
     return _formatBytes(freeSize!);
+  }
+
+  /// 使用済み容量を人間が読みやすい形式で取得
+  String? get formattedUsedSize {
+    if (usedSize == null) return null;
+    return _formatBytes(usedSize!);
+  }
+
+  /// 容量情報を「全体 (使用済み / 空き)」形式で取得
+  String? get formattedSizeDetail {
+    if (totalSize == null) return null;
+
+    final total = _formatBytes(totalSize!);
+
+    if (usedSize != null && freeSize != null) {
+      final used = _formatBytes(usedSize!);
+      final free = _formatBytes(freeSize!);
+      return '$total（使用: $used / 空き: $free）';
+    }
+
+    return total;
   }
 
   String _formatBytes(int bytes) {
@@ -89,10 +114,10 @@ class DetectedDevice {
 /// デバイスの種類
 enum DeviceType {
   /// SD カード（カードリーダー経由）
-  SdCard,
+  SDCard,
 
   /// USB ストレージ（カメラ直接接続など）
-  UsbStorage,
+  USBStorage,
 
   /// ネットワークドライブ
   NetworkDrive,
@@ -148,6 +173,9 @@ class DeviceDetector {
   /// ポーリングタイマー
   Timer? _pollingTimer;
 
+  /// ポーリングが一時停止中かどうか
+  bool _isPaused = false;
+
   /// 現在検出されているデバイス
   List<DetectedDevice> _currentDevices = [];
 
@@ -156,6 +184,9 @@ class DeviceDetector {
 
   /// 検出済みデバイスを取得
   List<DetectedDevice> get currentDevices => List.unmodifiable(_currentDevices);
+
+  /// ポーリングが動作中かどうか
+  bool get isPolling => _pollingTimer != null && !_isPaused;
 
   /// デバイスをスキャンする
   ///
@@ -204,29 +235,40 @@ class DeviceDetector {
     final repository = DisksRepository();
     final disks = await repository.query;
 
-    _log.debug('Found ${disks.length} disks', tag: 'DeviceDetector');
+    _log.debug('Found ${disks.length} disk(s) total.', tag: 'DeviceDetector');
 
     for (final disk in disks) {
+      final volumeName = disk.description;
+      final mountPoints = disk.mountpoints;
+      final mountPoint = mountPoints.isNotEmpty ? mountPoints.first.path : 'N/A';
+
+      _log.debug(
+        'Checking disk: $volumeName, mountPoint: $mountPoint, removable: ${disk.removable}, card: ${disk.card}, usb: ${disk.usb}.',
+        tag: 'DeviceDetector',
+      );
+
       // リムーバブルドライブのみを対象とする
-      if (!disk.removable) continue;
+      if (!disk.removable) {
+        _log.debug('Skipping non-removable disk: $volumeName.', tag: 'DeviceDetector');
+        continue;
+      }
 
       // PMHOME ボリュームはスキップ（ライセンス情報のみ）
-      final volumeName = disk.description;
       if (volumeName.toUpperCase() == 'PMHOME') {
-        _log.debug('Skipping PMHOME volume', tag: 'DeviceDetector');
+        _log.debug('Skipping PMHOME volume (license info only).', tag: 'DeviceDetector');
         continue;
       }
 
       // マウントポイントを取得
-      final mountPoints = disk.mountpoints;
-      if (mountPoints.isEmpty) continue;
-
-      final mountPoint = mountPoints.first.path;
+      if (mountPoints.isEmpty) {
+        _log.debug('Skipping disk with no mount points: $volumeName.', tag: 'DeviceDetector');
+        continue;
+      }
 
       // macOS システムボリュームを除外
       if (_shouldExcludeDevice(mountPoint, volumeName)) {
         _log.debug(
-          'Excluding system volume: $volumeName at $mountPoint',
+          'Excluding system volume: $volumeName at $mountPoint.',
           tag: 'DeviceDetector',
         );
         continue;
@@ -236,11 +278,15 @@ class DeviceDetector {
       final sonyFs = SonyFilesystemService(mountPoint);
       final validation = await sonyFs.validate();
 
+      // 空き容量情報を取得
+      final diskSpace = await _getDiskSpace(mountPoint);
+
       final device = DetectedDevice(
         mountPoint: mountPoint,
         name: disk.description,
-        totalSize: disk.size,
-        freeSize: null, // disks_desktop では空き容量は直接取得できない
+        totalSize: diskSpace?.total ?? disk.size,
+        usedSize: diskSpace?.used,
+        freeSize: diskSpace?.free,
         isSonyAlphaCard: validation.isValid,
         type: _determineDeviceType(disk),
       );
@@ -277,13 +323,102 @@ class DeviceDetector {
   DeviceType _determineDeviceType(Disk disk) {
     // disks_desktop のプロパティに基づいて判定
     if (disk.card == true) {
-      return DeviceType.SdCard;
+      return DeviceType.SDCard;
     } else if (disk.usb == true) {
-      return DeviceType.UsbStorage;
+      return DeviceType.USBStorage;
     } else if (disk.removable) {
-      return DeviceType.SdCard;
+      return DeviceType.SDCard;
     }
     return DeviceType.Unknown;
+  }
+
+  /// マウントポイントの空き容量情報を取得
+  ///
+  /// df コマンドを使用してディスクの使用状況を取得する。
+  /// 返り値は (totalBytes, usedBytes, freeBytes) のタプル。
+  /// 取得に失敗した場合は null を返す。
+  Future<({int total, int used, int free})?> _getDiskSpace(
+    String mountPoint,
+  ) async {
+    try {
+      if (Platform.isMacOS || Platform.isLinux) {
+        // df -k でキロバイト単位で出力
+        final result = await Process.run('df', ['-k', mountPoint]);
+        if (result.exitCode != 0) return null;
+
+        final lines = (result.stdout as String).split('\n');
+        if (lines.length < 2) return null;
+
+        // ヘッダー行をスキップして 2 行目をパース
+        // macOS の df -k 出力例:
+        // Filesystem 1024-blocks Used Available Capacity iused ifree %iused Mounted on
+        // /dev/disk4s1 62357504 33591296 28766208 54% 0 0 0% /Volumes/Untitled
+        final parts = lines[1].split(RegExp(r'\s+'));
+        if (parts.length < 4) return null;
+
+        final totalKb = int.tryParse(parts[1]);
+        final usedKb = int.tryParse(parts[2]);
+        final freeKb = int.tryParse(parts[3]);
+
+        if (totalKb == null || usedKb == null || freeKb == null) return null;
+
+        return (
+          total: totalKb * 1024,
+          used: usedKb * 1024,
+          free: freeKb * 1024,
+        );
+      } else if (Platform.isWindows) {
+        // Windows では fsutil を使用（wmic は廃止されたため）
+        // fsutil volume diskfree D:
+        // 出力例:
+        // Total # of bytes         : 64023257088
+        // Total # of free bytes    : 30123456789
+        // Total # of avail free bytes : 30123456789
+        final driveLetter = mountPoint.replaceAll(r'\', '');
+        final result = await Process.run('fsutil', [
+          'volume',
+          'diskfree',
+          driveLetter,
+        ]);
+        if (result.exitCode != 0) return null;
+
+        final output = result.stdout as String;
+        int? totalBytes;
+        int? freeBytes;
+
+        // 各行をパース
+        for (final line in output.split('\n')) {
+          // "Total # of bytes" の行から総容量を取得
+          if (line.contains('Total # of bytes') && !line.contains('free')) {
+            final match = RegExp(r':\s*(\d+)').firstMatch(line);
+            if (match != null) {
+              totalBytes = int.tryParse(match.group(1)!);
+            }
+          }
+          // "Total # of free bytes" の行から空き容量を取得
+          else if (line.contains('Total # of free bytes')) {
+            final match = RegExp(r':\s*(\d+)').firstMatch(line);
+            if (match != null) {
+              freeBytes = int.tryParse(match.group(1)!);
+            }
+          }
+        }
+
+        if (totalBytes == null || freeBytes == null) return null;
+
+        return (
+          total: totalBytes,
+          used: totalBytes - freeBytes,
+          free: freeBytes,
+        );
+      }
+    } catch (ex) {
+      _log.debug(
+        'Failed to get disk space for $mountPoint: $ex.',
+        tag: 'DeviceDetector',
+      );
+    }
+    return null;
   }
 
   /// ポーリングを開始する
@@ -291,7 +426,7 @@ class DeviceDetector {
   /// 定期的にデバイスをスキャンし、変更があれば通知する。
   void startPolling() {
     stopPolling();
-    _log.info('Starting device polling (interval: ${_pollingIntervalSeconds}s)', tag: 'DeviceDetector');
+    _log.info('Starting device polling (interval: ${_pollingIntervalSeconds}s).', tag: 'DeviceDetector');
 
     // 初回スキャン
     scan().then((devices) {
@@ -310,7 +445,7 @@ class DeviceDetector {
 
         // 変更があれば通知
         if (!_setEquals(previousPaths, currentPaths)) {
-          _log.info('Device list changed', tag: 'DeviceDetector');
+          _log.info('Device list changed.', tag: 'DeviceDetector');
           if (onDevicesChanged != null) {
             onDevicesChanged!(devices);
           }
@@ -322,9 +457,35 @@ class DeviceDetector {
   /// ポーリングを停止する
   void stopPolling() {
     if (_pollingTimer != null) {
-      _log.info('Stopping device polling', tag: 'DeviceDetector');
+      _log.info('Stopping device polling.', tag: 'DeviceDetector');
       _pollingTimer?.cancel();
       _pollingTimer = null;
+      _isPaused = false;
+    }
+  }
+
+  /// ポーリングを一時停止する
+  ///
+  /// 取り込み処理中など、一時的にスキャンを停止したい場合に使用する。
+  /// resumePolling() で再開できる。
+  void pausePolling() {
+    if (_pollingTimer != null && !_isPaused) {
+      _log.info('Pausing device polling.', tag: 'DeviceDetector');
+      _pollingTimer?.cancel();
+      _pollingTimer = null;
+      _isPaused = true;
+    }
+  }
+
+  /// 一時停止したポーリングを再開する
+  ///
+  /// pausePolling() で一時停止した場合のみ有効。
+  /// stopPolling() で停止した場合は startPolling() を使用すること。
+  void resumePolling() {
+    if (_isPaused) {
+      _log.info('Resuming device polling.', tag: 'DeviceDetector');
+      _isPaused = false;
+      startPolling();
     }
   }
 
@@ -342,11 +503,11 @@ class DeviceDetector {
   /// ユーザーが選択したフォルダを Sony SD カード構造として検証し、
   /// デバイスリストに追加する。
   Future<DetectedDevice?> addManualFolder(String folderPath) async {
-    _log.info('Adding manual folder: $folderPath', tag: 'DeviceDetector');
+    _log.info('Adding manual folder: $folderPath.', tag: 'DeviceDetector');
 
     final dir = Directory(folderPath);
     if (!await dir.exists()) {
-      _log.warning('Folder does not exist: $folderPath', tag: 'DeviceDetector');
+      _log.warning('Folder does not exist: $folderPath.', tag: 'DeviceDetector');
       return null;
     }
 

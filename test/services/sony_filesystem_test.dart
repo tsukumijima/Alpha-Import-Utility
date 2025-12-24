@@ -27,10 +27,10 @@ void main() {
           // Assert
           expect(validation.isValid, isTrue);
           expect(validation.hasDcimFolder, isTrue);
-          expect(validation.hasMsdcfFolder, isTrue);
+          expect(validation.hasDcfFolder, isTrue);
           expect(validation.hasClipFolder, isTrue);
           expect(validation.errorMessage, isNull);
-          expect(validation.msdcfFolders, isNotEmpty);
+          expect(validation.dcfFolders, isNotEmpty);
         } finally {
           await cleanup();
         }
@@ -54,11 +54,11 @@ void main() {
         }
       });
 
-      test('MSDCF フォルダがない場合は失敗する', () async {
+      test('DCF フォルダがない場合は失敗する', () async {
         final (tempDir, cleanup) = await createTempDirectory();
 
         try {
-          // MSDCF なしで作成
+          // DCF フォルダなしで作成
           await createMockSdCardStructure(tempDir, createMsdcfFolder: false);
           final service = SonyFilesystemService(tempDir);
 
@@ -66,8 +66,8 @@ void main() {
 
           expect(validation.isValid, isFalse);
           expect(validation.hasDcimFolder, isTrue);
-          expect(validation.hasMsdcfFolder, isFalse);
-          expect(validation.errorMessage, contains('MSDCF'));
+          expect(validation.hasDcfFolder, isFalse);
+          expect(validation.errorMessage, contains('DCF'));
         } finally {
           await cleanup();
         }
@@ -89,7 +89,7 @@ void main() {
 
           expect(validation.isValid, isFalse);
           expect(validation.hasDcimFolder, isTrue);
-          expect(validation.hasMsdcfFolder, isTrue);
+          expect(validation.hasDcfFolder, isTrue);
           expect(validation.hasClipFolder, isFalse);
           expect(validation.errorMessage, contains('CLIP'));
         } finally {
@@ -109,13 +109,12 @@ void main() {
 
           expect(validation.isValid, isFalse);
           expect(validation.hasDcimFolder, isTrue);
-          expect(validation.hasMsdcfFolder, isTrue);
+          expect(validation.hasDcfFolder, isTrue);
           expect(validation.hasClipFolder, isFalse);
           // M4ROOT がない設定では PRIVATE フォルダも作成されないため、
           // PRIVATE または M4ROOT を含むエラーメッセージになる
           expect(
-            validation.errorMessage!.contains('PRIVATE') ||
-                validation.errorMessage!.contains('M4ROOT'),
+            validation.errorMessage!.contains('PRIVATE') || validation.errorMessage!.contains('M4ROOT'),
             isTrue,
           );
         } finally {
@@ -151,7 +150,7 @@ void main() {
           final files = await service.scanMediaFiles(settings);
 
           expect(files.length, equals(2));
-          expect(files[0].type, equals(MediaType.JpegPhoto));
+          expect(files[0].type, equals(MediaType.JPEGPhoto));
           expect(files[0].fileName, equals('DSC00001.JPG'));
           expect(files[1].fileName, equals('DSC00002.JPG'));
         } finally {
@@ -176,7 +175,7 @@ void main() {
           final files = await service.scanMediaFiles(settings);
 
           expect(files.length, equals(2));
-          expect(files[0].type, equals(MediaType.RawPhoto));
+          expect(files[0].type, equals(MediaType.RAWPhoto));
           expect(files[0].fileName, equals('DSC00001.ARW'));
         } finally {
           await cleanup();
@@ -239,8 +238,7 @@ void main() {
           expect(filesWithoutProxy.length, equals(1));
 
           // プロキシ動画は ProxyVideo タイプ
-          final proxyFiles =
-              filesWithProxy.where((f) => f.type == MediaType.ProxyVideo);
+          final proxyFiles = filesWithProxy.where((f) => f.type == MediaType.ProxyVideo);
           expect(proxyFiles.length, equals(1));
         } finally {
           await cleanup();
@@ -278,8 +276,7 @@ void main() {
           expect(filesWithoutXml.length, equals(1));
 
           // XML ファイルは VideoMeta タイプ
-          final xmlFiles =
-              filesWithXml.where((f) => f.type == MediaType.VideoMeta);
+          final xmlFiles = filesWithXml.where((f) => f.type == MediaType.VideoMeta);
           expect(xmlFiles.length, equals(1));
         } finally {
           await cleanup();
@@ -331,7 +328,7 @@ void main() {
 
           expect(files.length, equals(2));
           // 写真が先、動画が後
-          expect(files[0].type, equals(MediaType.JpegPhoto));
+          expect(files[0].type, equals(MediaType.JPEGPhoto));
           expect(files[1].type, equals(MediaType.Video));
         } finally {
           await cleanup();
@@ -415,27 +412,27 @@ void main() {
   group('SonyFilesystemValidation', () {
     test('success factory は正しい値を設定する', () {
       final validation = SonyFilesystemValidation.success(
-        msdcfFolders: ['100MSDCF', '101MSDCF'],
+        dcfFolders: ['100MSDCF', '101MSDCF'],
       );
 
       expect(validation.isValid, isTrue);
       expect(validation.hasDcimFolder, isTrue);
-      expect(validation.hasMsdcfFolder, isTrue);
+      expect(validation.hasDcfFolder, isTrue);
       expect(validation.hasClipFolder, isTrue);
       expect(validation.errorMessage, isNull);
-      expect(validation.msdcfFolders.length, equals(2));
+      expect(validation.dcfFolders.length, equals(2));
     });
 
     test('failure factory は正しい値を設定する', () {
       final validation = SonyFilesystemValidation.failure(
         errorMessage: 'Test error',
         hasDcimFolder: true,
-        hasMsdcfFolder: true,
+        hasDcfFolder: true,
       );
 
       expect(validation.isValid, isFalse);
       expect(validation.hasDcimFolder, isTrue);
-      expect(validation.hasMsdcfFolder, isTrue);
+      expect(validation.hasDcfFolder, isTrue);
       expect(validation.hasClipFolder, isFalse);
       expect(validation.errorMessage, equals('Test error'));
     });

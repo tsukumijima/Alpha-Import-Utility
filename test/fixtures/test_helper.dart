@@ -157,7 +157,8 @@ Future<void> createMockMetadataJson(
 
   await metadataFile.parent.create(recursive: true);
 
-  final content = '''
+  final content =
+      '''
 {
   "version": "1.0.0",
   "lastUpdated": "${DateTime.now().toUtc().toIso8601String()}",
@@ -182,9 +183,11 @@ String _filesToJson(List<Map<String, dynamic>> files) {
 }
 
 String _mapToJson(Map<String, dynamic> map) {
-  final entries = map.entries.map((e) {
-    final value = e.value is String ? '"${e.value}"' : e.value;
-    return '"${e.key}": $value';
-  }).join(', ');
+  final entries = map.entries
+      .map((e) {
+        final value = e.value is String ? '"${e.value}"' : e.value;
+        return '"${e.key}": $value';
+      })
+      .join(', ');
   return '{$entries}';
 }

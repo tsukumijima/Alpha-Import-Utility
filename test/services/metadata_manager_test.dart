@@ -46,7 +46,7 @@ void main() {
                 'importedAt': '2025-12-24T15:28:00.000Z',
                 'destinationPath': '2025_12_24/DSC00001.ARW',
                 'appVersion': '1.0.0',
-              }
+              },
             ],
           );
 
@@ -97,7 +97,7 @@ void main() {
                 'importedAt': '2025-12-24T15:28:00.000Z',
                 'destinationPath': '2025_12_24/DSC00001.ARW',
                 'appVersion': '1.0.0',
-              }
+              },
             ],
           );
 
@@ -239,24 +239,28 @@ void main() {
           final manager = MetadataManager(tempDir);
 
           // 1 つ目のレコードを追加
-          await manager.addRecord(ImportedFileRecord(
-            sourcePath: 'DCIM/100MSDCF/DSC00001.ARW',
-            xxHash: 'hash1',
-            fileSize: 1000,
-            importedAt: DateTime.utc(2025, 12, 24),
-            destinationPath: '2025_12_24/DSC00001.ARW',
-            appVersion: '1.0.0',
-          ));
+          await manager.addRecord(
+            ImportedFileRecord(
+              sourcePath: 'DCIM/100MSDCF/DSC00001.ARW',
+              xxHash: 'hash1',
+              fileSize: 1000,
+              importedAt: DateTime.utc(2025, 12, 24),
+              destinationPath: '2025_12_24/DSC00001.ARW',
+              appVersion: '1.0.0',
+            ),
+          );
 
           // 2 つ目のレコードを追加
-          await manager.addRecord(ImportedFileRecord(
-            sourcePath: 'DCIM/100MSDCF/DSC00002.ARW',
-            xxHash: 'hash2',
-            fileSize: 2000,
-            importedAt: DateTime.utc(2025, 12, 24),
-            destinationPath: '2025_12_24/DSC00002.ARW',
-            appVersion: '1.0.0',
-          ));
+          await manager.addRecord(
+            ImportedFileRecord(
+              sourcePath: 'DCIM/100MSDCF/DSC00002.ARW',
+              xxHash: 'hash2',
+              fileSize: 2000,
+              importedAt: DateTime.utc(2025, 12, 24),
+              destinationPath: '2025_12_24/DSC00002.ARW',
+              appVersion: '1.0.0',
+            ),
+          );
 
           final metadata = await manager.load();
           expect(metadata.files.length, equals(2));
@@ -332,7 +336,7 @@ void main() {
                 'importedAt': '2025-12-24T15:28:00.000Z',
                 'destinationPath': '2025_12_24/DSC00001.ARW',
                 'appVersion': '1.0.0',
-              }
+              },
             ],
           );
 
@@ -377,7 +381,7 @@ void main() {
                 'importedAt': '2025-12-24T15:28:00.000Z',
                 'destinationPath': '2025_12_24/DSC00001.ARW',
                 'appVersion': '1.0.0',
-              }
+              },
             ],
           );
 
@@ -451,7 +455,7 @@ void main() {
                 'importedAt': '2025-12-24T15:28:00.000Z',
                 'destinationPath': '2025_12_24/DSC00001.ARW',
                 'appVersion': '1.0.0',
-              }
+              },
             ],
           );
 

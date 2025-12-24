@@ -153,15 +153,26 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // 取り込みダイアログを表示
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => ImportDialog(
-        device: device,
-        settings: _settings!,
-      ),
-    );
+    // 取り込み中はデバイス検出のポーリングを一時停止
+    // ログの可読性向上とリソース節約のため
+    _log.info('Pausing device polling during import.', tag: 'HomeScreen');
+    _deviceDetector.pausePolling();
+
+    try {
+      // 取り込みダイアログを表示
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => ImportDialog(
+          device: device,
+          settings: _settings!,
+        ),
+      );
+    } finally {
+      // 取り込み完了後（成功・キャンセル問わず）にポーリングを再開
+      _log.info('Resuming device polling after import.', tag: 'HomeScreen');
+      _deviceDetector.resumePolling();
+    }
   }
 
   /// デバイスタイプ別にフィルタ
@@ -170,10 +181,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// USB ストレージ（カメラ直接接続）を取得
-  List<DetectedDevice> get _cameraDevices => _getDevicesByType(DeviceType.UsbStorage);
+  List<DetectedDevice> get _cameraDevices => _getDevicesByType(DeviceType.USBStorage);
 
   /// SD カードを取得
-  List<DetectedDevice> get _sdCardDevices => _getDevicesByType(DeviceType.SdCard);
+  List<DetectedDevice> get _sdCardDevices => _getDevicesByType(DeviceType.SDCard);
 
   /// 手動選択フォルダを取得
   List<DetectedDevice> get _folderDevices => _getDevicesByType(DeviceType.LocalFolder);
@@ -191,9 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // コンテンツ
               Expanded(
-                child: _isScanning
-                    ? _buildLoadingIndicator()
-                    : _buildContent(context),
+                child: _isScanning ? _buildLoadingIndicator() : _buildContent(context),
               ),
             ],
           ),
@@ -313,7 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // フォルダから取り込みセクション
           _buildFolderSection(context),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -366,13 +375,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // デバイス一覧またはプレースホルダー
         if (devices.isNotEmpty)
-          ...devices.map((device) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: DeviceCard(
-                  device: device,
-                  onTap: () => _startImport(device),
-                ),
-              ))
+          ...devices.map(
+            (device) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: DeviceCard(
+                device: device,
+                onTap: () => _startImport(device),
+              ),
+            ),
+          )
         else
           _buildEmptyPlaceholder(context, emptyMessage, emptyHint),
       ],
@@ -418,13 +429,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // 手動選択済みフォルダ
         if (_folderDevices.isNotEmpty)
-          ..._folderDevices.map((device) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: DeviceCard(
-                  device: device,
-                  onTap: () => _startImport(device),
-                ),
-              )),
+          ..._folderDevices.map(
+            (device) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: DeviceCard(
+                device: device,
+                onTap: () => _startImport(device),
+              ),
+            ),
+          ),
 
         // フォルダ選択ボタン
         Card(

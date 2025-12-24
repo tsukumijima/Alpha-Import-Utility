@@ -22,8 +22,6 @@ dependencies:
   xxh3: ^1.1.0
   # XML パース（動画メタデータ読み取り用）
   xml: ^6.5.0
-  # 設定永続化
-  shared_preferences: ^2.3.0
   # JSON シリアライズ
   json_annotation: ^4.9.0
   # ウィンドウ管理（サイズ・位置保存）

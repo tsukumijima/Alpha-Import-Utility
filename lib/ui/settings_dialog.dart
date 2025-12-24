@@ -1,6 +1,7 @@
 /// 設定ダイアログ
 ///
 /// アプリケーション設定を編集するモーダルダイアログ。
+/// タブで「基本設定」と「取り込みオプション」を切り替えられる。
 library;
 
 import 'package:flutter/material.dart';
@@ -53,23 +54,28 @@ class SettingsDialog extends StatefulWidget {
   State<SettingsDialog> createState() => _SettingsDialogState();
 }
 
-class _SettingsDialogState extends State<SettingsDialog> {
+class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProviderStateMixin {
   /// 編集中の設定
   late ImportSettings _settings;
 
   /// 保存先フォルダのテキストコントローラー
   late TextEditingController _destinationController;
 
+  /// タブコントローラー
+  late TabController _tabController;
+
   @override
   void initState() {
     super.initState();
     _settings = widget.settings;
     _destinationController = TextEditingController(text: _settings.destinationFolder);
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
   void dispose() {
     _destinationController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -81,9 +87,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     try {
       final result = await FilePicker.platform.getDirectoryPath(
         dialogTitle: '保存先フォルダを選択',
-        initialDirectory: _settings.destinationFolder.isNotEmpty
-            ? _settings.destinationFolder
-            : null,
+        initialDirectory: _settings.destinationFolder.isNotEmpty ? _settings.destinationFolder : null,
       );
 
       if (result != null) {
@@ -105,68 +109,202 @@ class _SettingsDialogState extends State<SettingsDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return AlertDialog(
-      title: const Text('設定'),
-      content: SizedBox(
-        width: 500,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 保存先フォルダ
-              _buildSectionTitle(theme, '保存先フォルダ'),
-              const SizedBox(height: 8),
-              _buildDestinationFolder(),
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 600),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ダイアログヘッダー
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              child: Row(
+                children: [
+                  Icon(Icons.settings, color: theme.colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Text('設定', style: theme.textTheme.headlineSmall),
+                ],
+              ),
+            ),
 
-              const SizedBox(height: 24),
+            // タブバー
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: '基本設定'),
+                Tab(text: '取り込みオプション'),
+              ],
+            ),
 
-              // サブフォルダ設定
-              _buildSectionTitle(theme, 'サブフォルダ設定'),
-              const SizedBox(height: 8),
-              _buildSubfolderSettings(),
+            // タブコンテンツ
+            Flexible(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildBasicSettingsTab(theme),
+                  _buildOptionsTab(theme),
+                ],
+              ),
+            ),
 
-              const SizedBox(height: 24),
-
-              // 日付フォーマット
-              _buildSectionTitle(theme, '日付フォーマット'),
-              const SizedBox(height: 8),
-              _buildDateFormatSettings(),
-
-              const SizedBox(height: 24),
-
-              // カメラタイムゾーン
-              _buildSectionTitle(theme, 'カメラタイムゾーン'),
-              const SizedBox(height: 8),
-              _buildTimezoneSettings(),
-
-              const SizedBox(height: 16),
-
-              // プレビュー（オプションの上に配置）
-              _buildPreview(theme),
-
-              const SizedBox(height: 24),
-
-              // オプション
-              _buildSectionTitle(theme, 'オプション'),
-              const SizedBox(height: 8),
-              _buildOptionSettings(),
-            ],
-          ),
+            // アクションボタン
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('キャンセル'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _settings.hasDestinationFolder ? () => Navigator.pop(context, _settings) : null,
+                    child: const Text('保存'),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('キャンセル'),
-        ),
-        ElevatedButton(
-          onPressed: _settings.hasDestinationFolder
-              ? () => Navigator.pop(context, _settings)
-              : null,
-          child: const Text('保存'),
-        ),
-      ],
+    );
+  }
+
+  /// 基本設定タブを構築
+  Widget _buildBasicSettingsTab(ThemeData theme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 保存先フォルダ
+          _buildSectionTitle(theme, '保存先フォルダ'),
+          const SizedBox(height: 6),
+          Text(
+            '取り込んだ写真・動画を保存するフォルダを指定します。',
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+          ),
+          const SizedBox(height: 20),
+          _buildDestinationFolder(),
+
+          const SizedBox(height: 28),
+
+          // サブフォルダ設定
+          _buildSectionTitle(theme, 'サブフォルダ設定'),
+          const SizedBox(height: 6),
+          Text(
+            '撮影日ごとにサブフォルダを作成するパターンを選択します。',
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+          ),
+          const SizedBox(height: 20),
+          _buildSubfolderSettings(),
+
+          const SizedBox(height: 28),
+
+          // 日付フォーマット
+          _buildSectionTitle(theme, '日付フォーマット'),
+          const SizedBox(height: 6),
+          Text(
+            'サブフォルダ名に使用する日付の表記形式を指定します。',
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+          ),
+          const SizedBox(height: 20),
+          _buildDateFormatSettings(),
+
+          const SizedBox(height: 24),
+
+          // プレビュー
+          _buildPreview(theme),
+        ],
+      ),
+    );
+  }
+
+  /// オプションタブを構築
+  Widget _buildOptionsTab(ThemeData theme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle(theme, 'ファイル日時の復元'),
+          const SizedBox(height: 6),
+          Text(
+            'コピー後のファイルの作成日時・更新日時を、EXIF に記録された撮影日時に合わせます。',
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+          ),
+          const SizedBox(height: 6),
+          SwitchListTile(
+            title: const Text('EXIF から日時を復元'),
+            value: _settings.isRestoreDateTimeFromExif,
+            contentPadding: EdgeInsets.zero,
+            onChanged: (value) {
+              setState(() {
+                _settings = _settings.copyWith(isRestoreDateTimeFromExif: value);
+              });
+            },
+          ),
+
+          const Divider(height: 32),
+
+          // カメラタイムゾーン
+          _buildSectionTitle(theme, 'カメラタイムゾーン'),
+          const SizedBox(height: 6),
+          Text(
+            'カメラに設定されているタイムゾーンを指定します。\n'
+            'この情報はファイル日時の復元時に利用されます。\n'
+            '日本国内で使用している場合は「東京」を選択してください。',
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+          ),
+          const SizedBox(height: 20),
+          _buildTimezoneSettings(),
+
+          const Divider(height: 32),
+
+          _buildSectionTitle(theme, '動画メタデータ'),
+          const SizedBox(height: 6),
+          Text(
+            '動画ファイル (.MP4) に付随する XML メタデータ (例: C0001M01.XML) も取り込みます。\n'
+            '動画単体で利活用する分には不要ですが、ソニー純正ソフトとの互換性のため、取り込むことを推奨します。',
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+          ),
+          const SizedBox(height: 6),
+          SwitchListTile(
+            title: const Text('動画メタデータ (XML) を取り込む'),
+            value: _settings.isImportVideoXML,
+            contentPadding: EdgeInsets.zero,
+            onChanged: (value) {
+              setState(() {
+                _settings = _settings.copyWith(isImportVideoXML: value);
+              });
+            },
+          ),
+
+          const Divider(height: 32),
+
+          _buildSectionTitle(theme, 'プロキシー動画'),
+          const SizedBox(height: 6),
+          Text(
+            'オリジナルの動画ファイルと同時に生成された、低解像度のプロキシー動画\n'
+            '(PRIVATE/M4ROOT/SUB/ フォルダ内) も取り込みます。',
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+          ),
+          const SizedBox(height: 6),
+          SwitchListTile(
+            title: const Text('プロキシー動画を取り込む'),
+            value: _settings.isImportProxyVideos,
+            contentPadding: EdgeInsets.zero,
+            onChanged: (value) {
+              setState(() {
+                _settings = _settings.copyWith(isImportProxyVideos: value);
+              });
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -228,36 +366,6 @@ class _SettingsDialogState extends State<SettingsDialog> {
     );
   }
 
-  /// タイムゾーン設定を構築
-  Widget _buildTimezoneSettings() {
-    // 現在の設定値がリストにあるか確認
-    final currentTimezone = _supportedTimezones.firstWhere(
-      (tz) => tz.id == _settings.cameraTimezone,
-      orElse: () => _supportedTimezones.firstWhere((tz) => tz.id == 'Asia/Tokyo'),
-    );
-
-    return DropdownButtonFormField<String>(
-      initialValue: currentTimezone.id,
-      decoration: const InputDecoration(
-        labelText: 'タイムゾーン',
-        helperText: 'カメラの内部時刻が設定されているタイムゾーン',
-      ),
-      items: _supportedTimezones.map((tz) {
-        return DropdownMenuItem(
-          value: tz.id,
-          child: Text('${tz.name} (${tz.offset})'),
-        );
-      }).toList(),
-      onChanged: (value) {
-        if (value != null) {
-          setState(() {
-            _settings = _settings.copyWith(cameraTimezone: value);
-          });
-        }
-      },
-    );
-  }
-
   /// 日付フォーマット設定を構築
   Widget _buildDateFormatSettings() {
     return Column(
@@ -309,49 +417,6 @@ class _SettingsDialogState extends State<SettingsDialog> {
     );
   }
 
-  /// オプション設定を構築
-  Widget _buildOptionSettings() {
-    return Column(
-      children: [
-        // EXIF から日時復元
-        SwitchListTile(
-          title: const Text('EXIF から日時を復元'),
-          subtitle: const Text('コピー後のファイル日時を撮影日時に合わせます'),
-          value: _settings.isRestoreDateTimeFromExif,
-          onChanged: (value) {
-            setState(() {
-              _settings = _settings.copyWith(isRestoreDateTimeFromExif: value);
-            });
-          },
-        ),
-
-        // 動画 XML 取り込み
-        SwitchListTile(
-          title: const Text('動画メタデータ (XML) を取り込む'),
-          subtitle: const Text('通常は不要です'),
-          value: _settings.isImportVideoXML,
-          onChanged: (value) {
-            setState(() {
-              _settings = _settings.copyWith(isImportVideoXML: value);
-            });
-          },
-        ),
-
-        // プロキシ動画取り込み
-        SwitchListTile(
-          title: const Text('プロキシ動画を取り込む'),
-          subtitle: const Text('編集用の低解像度動画'),
-          value: _settings.isImportProxyVideos,
-          onChanged: (value) {
-            setState(() {
-              _settings = _settings.copyWith(isImportProxyVideos: value);
-            });
-          },
-        ),
-      ],
-    );
-  }
-
   /// プレビューを構築
   Widget _buildPreview(ThemeData theme) {
     final examplePath = _settings.subfolderPattern.getExample(
@@ -383,11 +448,40 @@ class _SettingsDialogState extends State<SettingsDialog> {
             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary),
           ),
           Text(
-            '      └─ DSC00001.ARW',
+            '      └─ DSC00001.JPG',
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white54),
           ),
         ],
       ),
+    );
+  }
+
+  /// タイムゾーン設定を構築
+  Widget _buildTimezoneSettings() {
+    // 現在の設定値がリストにあるか確認
+    final currentTimezone = _supportedTimezones.firstWhere(
+      (tz) => tz.id == _settings.cameraTimezone,
+      orElse: () => _supportedTimezones.firstWhere((tz) => tz.id == 'Asia/Tokyo'),
+    );
+
+    return DropdownButtonFormField<String>(
+      initialValue: currentTimezone.id,
+      decoration: const InputDecoration(
+        labelText: 'タイムゾーン',
+      ),
+      items: _supportedTimezones.map((tz) {
+        return DropdownMenuItem(
+          value: tz.id,
+          child: Text('${tz.name} (${tz.offset})'),
+        );
+      }).toList(),
+      onChanged: (value) {
+        if (value != null) {
+          setState(() {
+            _settings = _settings.copyWith(cameraTimezone: value);
+          });
+        }
+      },
     );
   }
 }

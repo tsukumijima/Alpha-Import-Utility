@@ -136,8 +136,7 @@ class ImportedFileRecord {
   });
 
   /// JSON からデシリアライズ
-  factory ImportedFileRecord.fromJson(Map<String, dynamic> json) =>
-      _$ImportedFileRecordFromJson(json);
+  factory ImportedFileRecord.fromJson(Map<String, dynamic> json) => _$ImportedFileRecordFromJson(json);
 
   /// JSON にシリアライズ
   Map<String, dynamic> toJson() => _$ImportedFileRecordToJson(this);
@@ -170,15 +169,11 @@ class ImportMetadata {
 
   /// 空のメタデータを作成
   factory ImportMetadata.empty() {
-    return ImportMetadata(
-      lastUpdated: DateTime.now().toUtc(),
-      files: [],
-    );
+    return ImportMetadata(lastUpdated: DateTime.now().toUtc(), files: []);
   }
 
   /// JSON からデシリアライズ
-  factory ImportMetadata.fromJson(Map<String, dynamic> json) =>
-      _$ImportMetadataFromJson(json);
+  factory ImportMetadata.fromJson(Map<String, dynamic> json) => _$ImportMetadataFromJson(json);
 
   /// JSON にシリアライズ
   Map<String, dynamic> toJson() => _$ImportMetadataToJson(this);
@@ -379,11 +374,7 @@ class ImportProgress {
 
   /// 初期状態を作成
   factory ImportProgress.initial() {
-    return ImportProgress(
-      processedCount: 0,
-      totalCount: 0,
-      phase: 'スキャン中...',
-    );
+    return ImportProgress(processedCount: 0, totalCount: 0, phase: 'スキャン中...');
   }
 
   /// 全体の進捗率（0.0 〜 1.0）
@@ -413,9 +404,7 @@ class ImportProgress {
 
   /// ファイルコピー進捗を更新
   ImportProgress updateFileProgress(int copiedBytes) {
-    final progress = currentFileTotalBytes > 0
-        ? copiedBytes / currentFileTotalBytes
-        : 0.0;
+    final progress = currentFileTotalBytes > 0 ? copiedBytes / currentFileTotalBytes : 0.0;
     return ImportProgress(
       currentFile: currentFile,
       processedCount: processedCount,

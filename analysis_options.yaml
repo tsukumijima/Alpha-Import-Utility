@@ -24,9 +24,15 @@ linter:
     # avoid_print: false  # Uncomment to disable the `avoid_print` rule
     # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
 
-    # ユーザーの好みにより、enum 値は UpperCamelCase を使用する
+    # enum 値は UpperCamelCase を使用する
     # Dart 標準の lowerCamelCase ルールを無効化
     constant_identifier_names: false
+
+formatter:
+  # 80文字は少なすぎるので120文字基準とする
+  page_width: 120
+  # ref: https://github.com/dart-lang/sdk/blob/main/CHANGELOG.md#dart-format
+  trailing_commas: preserve
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

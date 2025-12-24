@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../models/import_result.dart';
+import 'logging_service.dart';
 
 /// メタデータファイルのパス定数
 const String _metadataFolderName = 'AIU';
@@ -22,6 +23,9 @@ const String _metadataFileName = 'METADATA.JSON';
 class MetadataManager {
   /// SD カードのルートパス
   final String sdCardRoot;
+
+  /// ロガー
+  final _log = LoggingService.instance;
 
   /// メタデータの内容（メモリ上のキャッシュ）
   ImportMetadata? _metadata;
@@ -50,6 +54,10 @@ class MetadataManager {
 
     // ファイルが存在しない場合は空のメタデータを返す
     if (!await file.exists()) {
+      _log.debug(
+        'Metadata file does not exist, returning empty metadata: $metadataFilePath.',
+        tag: 'MetadataManager',
+      );
       _metadata = ImportMetadata.empty();
       _lastLoadedModified = null;
       return _metadata!;
@@ -60,22 +68,35 @@ class MetadataManager {
       final stat = await file.stat();
 
       // キャッシュが有効な場合はそれを返す
-      if (_metadata != null &&
-          _lastLoadedModified != null &&
-          stat.modified == _lastLoadedModified) {
+      if (_metadata != null && _lastLoadedModified != null && stat.modified == _lastLoadedModified) {
+        _log.debug('Using cached metadata.', tag: 'MetadataManager');
         return _metadata!;
       }
 
       // ファイルを読み込んでパース
+      _log.debug(
+        'Loading metadata from file: $metadataFilePath.',
+        tag: 'MetadataManager',
+      );
       final content = await file.readAsString();
       final json = jsonDecode(content) as Map<String, dynamic>;
       _metadata = ImportMetadata.fromJson(json);
       _lastLoadedModified = stat.modified;
 
+      _log.info(
+        'Metadata loaded: ${_metadata!.files.length} file records.',
+        tag: 'MetadataManager',
+      );
       return _metadata!;
-    } catch (ex) {
+    } catch (ex, stackTrace) {
       // JSON パースエラーなど - 破損したファイルとして扱う
       // エラーログを記録して空のメタデータを返す
+      _log.error(
+        'Failed to parse metadata file, treating as empty: $metadataFilePath.',
+        tag: 'MetadataManager',
+        error: ex,
+        stackTrace: stackTrace,
+      );
       _metadata = ImportMetadata.empty();
       _lastLoadedModified = null;
       return _metadata!;
@@ -91,8 +112,17 @@ class MetadataManager {
     final file = File(metadataFilePath);
     final tempFile = File('$metadataFilePath.tmp');
 
+    _log.debug(
+      'Saving metadata to: $metadataFilePath.',
+      tag: 'MetadataManager',
+    );
+
     // フォルダを作成（存在しない場合）
     if (!await folder.exists()) {
+      _log.debug(
+        'Creating metadata folder: $metadataFolderPath.',
+        tag: 'MetadataManager',
+      );
       await folder.create(recursive: true);
     }
 
@@ -114,6 +144,11 @@ class MetadataManager {
     // キャッシュを更新
     _metadata = metadata;
     _lastLoadedModified = (await file.stat()).modified;
+
+    _log.info(
+      'Metadata saved: ${metadata.files.length} file records.',
+      tag: 'MetadataManager',
+    );
   }
 
   /// 単一のレコードを追加して保存
@@ -122,6 +157,10 @@ class MetadataManager {
   /// 各ファイルのコピー完了後に呼び出すことで、
   /// 中断時も進捗を保持できる。
   Future<void> addRecord(ImportedFileRecord record) async {
+    _log.debug(
+      'Adding record: ${record.sourcePath}.',
+      tag: 'MetadataManager',
+    );
     final metadata = await load();
     final updatedMetadata = metadata.addRecord(record);
     await save(updatedMetadata);
@@ -131,6 +170,10 @@ class MetadataManager {
   Future<void> addRecords(List<ImportedFileRecord> records) async {
     if (records.isEmpty) return;
 
+    _log.debug(
+      'Adding ${records.length} records.',
+      tag: 'MetadataManager',
+    );
     final metadata = await load();
     final updatedMetadata = metadata.addRecords(records);
     await save(updatedMetadata);
@@ -168,6 +211,11 @@ class MetadataManager {
   ///
   /// メタデータフォルダへのファイル作成を試みて判定する。
   Future<bool> isWritable() async {
+    _log.debug(
+      'Testing write access to: $metadataFolderPath.',
+      tag: 'MetadataManager',
+    );
+
     try {
       final folder = Directory(metadataFolderPath);
       final testFile = File(p.join(metadataFolderPath, '.write_test'));
@@ -181,8 +229,14 @@ class MetadataManager {
       await testFile.writeAsString('test');
       await testFile.delete();
 
+      _log.debug('Write access test passed.', tag: 'MetadataManager');
       return true;
-    } catch (_) {
+    } catch (ex) {
+      _log.warning(
+        'Write access test failed.',
+        tag: 'MetadataManager',
+        error: ex,
+      );
       return false;
     }
   }

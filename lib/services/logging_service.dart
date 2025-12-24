@@ -2,14 +2,13 @@
 ///
 /// アプリケーションのログをファイルに出力する。
 /// ログファイルは起動ごとに新規作成され、以下の場所に保存される:
-/// - macOS: ~/Library/Application Support/AlphaImportUtility/logs/
-/// - Windows: %APPDATA%/AlphaImportUtility/logs/
+/// - macOS: ~/Library/Application Support/Alpha-Import-Utility/Logs/
+/// - Windows: %APPDATA%/Alpha-Import-Utility/Logs/
 library;
 
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 /// ログレベル
 enum LogLevel {
@@ -79,9 +78,27 @@ class LoggingService {
   }
 
   /// ログディレクトリを取得
+  ///
+  /// macOS: ~/Library/Application Support/Alpha-Import-Utility/Logs/
+  /// Windows: %APPDATA%/Alpha-Import-Utility/Logs/
   Future<Directory> _getLogDirectory() async {
-    final appSupportDir = await getApplicationSupportDirectory();
-    return Directory(p.join(appSupportDir.path, 'logs'));
+    final String basePath;
+
+    if (Platform.isMacOS) {
+      // macOS: ~/Library/Application Support/
+      final home = Platform.environment['HOME'] ?? '/tmp';
+      basePath = p.join(home, 'Library', 'Application Support');
+    } else if (Platform.isWindows) {
+      // Windows: %APPDATA%
+      basePath =
+          Platform.environment['APPDATA'] ?? p.join(Platform.environment['USERPROFILE'] ?? '', 'AppData', 'Roaming');
+    } else {
+      // Linux/その他: ~/.local/share/
+      final home = Platform.environment['HOME'] ?? '/tmp';
+      basePath = p.join(home, '.local', 'share');
+    }
+
+    return Directory(p.join(basePath, 'Alpha-Import-Utility', 'Logs'));
   }
 
   /// 数値を 2 桁のゼロ埋め文字列に変換

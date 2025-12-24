@@ -35,9 +35,7 @@ class ExifDateTime {
 
   /// いずれかの日時が取得できたか
   bool get hasAnyDateTime {
-    return dateTimeOriginal != null ||
-        dateTimeDigitized != null ||
-        dateTime != null;
+    return dateTimeOriginal != null || dateTimeDigitized != null || dateTime != null;
   }
 }
 
@@ -125,8 +123,7 @@ Future<DateTime?> readVideoXmlDateTime(File xmlFile) async {
 
     // CreationDate 要素を探す
     // 形式: <CreationDate value="2025-12-24T15:30:00+09:00"/>
-    final creationDateElements =
-        document.findAllElements('CreationDate');
+    final creationDateElements = document.findAllElements('CreationDate');
 
     if (creationDateElements.isEmpty) {
       return null;
@@ -165,9 +162,7 @@ Future<File?> findVideoXmlFile(File videoFile) async {
         final fileName = entity.uri.pathSegments.last.toUpperCase();
 
         // パターン: {baseName}M{数字2桁}.XML
-        if (fileName.startsWith(baseName.toUpperCase()) &&
-            fileName.endsWith('.XML') &&
-            fileName.contains('M')) {
+        if (fileName.startsWith(baseName.toUpperCase()) && fileName.endsWith('.XML') && fileName.contains('M')) {
           return entity;
         }
       }

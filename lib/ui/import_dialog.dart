@@ -151,8 +151,8 @@ class _ImportDialogState extends State<ImportDialog> {
         Text(
           '${widget.device.displayName} から取り込み中',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.white70,
-              ),
+            color: Colors.white70,
+          ),
         ),
         const SizedBox(height: 24),
 
@@ -190,8 +190,8 @@ class _ImportDialogState extends State<ImportDialog> {
       title: Text(
         '警告 (${_result!.warnings.length}件)',
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Colors.orange,
-            ),
+          color: Colors.orange,
+        ),
       ),
       initiallyExpanded: false,
       children: _result!.warnings.map((warning) {
@@ -205,8 +205,8 @@ class _ImportDialogState extends State<ImportDialog> {
           subtitle: Text(
             warning.message,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white54,
-                ),
+              color: Colors.white54,
+            ),
           ),
         );
       }).toList(),
