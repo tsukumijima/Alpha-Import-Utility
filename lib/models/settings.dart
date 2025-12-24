@@ -168,7 +168,7 @@ class ImportSettings {
   /// 内容は MP4 本体にも埋め込まれているため、通常は不要。
   final bool isImportVideoXML;
 
-  /// プロキシ動画を取り込むか
+  /// プロキシー動画を取り込むか
   ///
   /// PRIVATE/M4ROOT/SUB/ にある低解像度動画。
   /// 編集ソフトでのプレビュー用途に使用される。

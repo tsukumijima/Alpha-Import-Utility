@@ -13,6 +13,7 @@ import '../models/import_result.dart';
 import '../models/settings.dart';
 import '../utils/exif_utils.dart';
 import '../utils/file_utils.dart';
+import '../utils/timezone_utils.dart';
 import 'logging_service.dart';
 
 /// Sony SD カード構造の検証結果
@@ -304,10 +305,17 @@ class SonyFilesystemService {
         dcfPath,
         warnings,
         cameraTimezone: settings.cameraTimezone,
+        restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
       );
       photoFiles.addAll(photos);
     }
-    mediaFiles.addAll(_applyRawExifFallback(photoFiles));
+    mediaFiles.addAll(
+      _applyRawExifFallback(
+        photoFiles,
+        cameraTimezone: settings.cameraTimezone,
+        restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+      ),
+    );
 
     // 2. PRIVATE/M4ROOT/CLIP 内の動画をスキャン
     final clipPath = await _getClipPath();
@@ -318,11 +326,12 @@ class SonyFilesystemService {
         includeXml: settings.isImportVideoXML,
         warnings: warnings,
         cameraTimezone: settings.cameraTimezone,
+        restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
       );
       mediaFiles.addAll(videos);
     }
 
-    // 3. PRIVATE/M4ROOT/SUB 内のプロキシ動画をスキャン（設定で有効な場合）
+    // 3. PRIVATE/M4ROOT/SUB 内のプロキシー動画をスキャン（設定で有効な場合）
     if (settings.isImportProxyVideos) {
       final subPath = await _getSubPath();
       if (subPath != null) {
@@ -332,6 +341,7 @@ class SonyFilesystemService {
           includeXml: false, // SUB フォルダの XML は取り込まない
           warnings: warnings,
           cameraTimezone: settings.cameraTimezone,
+          restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
         );
         mediaFiles.addAll(proxyVideos);
       }
@@ -369,13 +379,21 @@ class SonyFilesystemService {
   ///
   /// RAW に EXIF が無い場合、同一フォルダ内で同じベース名の JPEG/HIF が
   /// 持つ EXIF をフォールバックとして適用する。
-  List<MediaFile> _applyRawExifFallback(List<MediaFile> photoFiles) {
-    final fallbackByKey = <String, DateTime>{};
+  List<MediaFile> _applyRawExifFallback(
+    List<MediaFile> photoFiles, {
+    required String cameraTimezone,
+    required int restoreToleranceSeconds,
+  }) {
+    final fallbackByKey = <String, ({DateTime local, int? utcMs, bool hasTimezone})>{};
 
     for (final file in photoFiles) {
       if (file.type == MediaType.JPEGPhoto || file.type == MediaType.HEIFPhoto) {
         if (file.isExifDateTimeValid) {
-          fallbackByKey[_buildBaseNameKey(file)] = file.exifDateTime!;
+          fallbackByKey[_buildBaseNameKey(file)] = (
+            local: file.exifDateTimeLocal!,
+            utcMs: file.exifDateTimeUtcMs,
+            hasTimezone: file.hasExifTimezone,
+          );
         }
       }
     }
@@ -388,11 +406,244 @@ class SonyFilesystemService {
       if (file.type == MediaType.RAWPhoto && !file.isExifDateTimeValid) {
         final fallback = fallbackByKey[_buildBaseNameKey(file)];
         if (fallback != null) {
-          return _copyMediaFileWithExifDateTime(file, fallback);
+          return _copyMediaFileWithExifDateTime(
+            file,
+            fallback.local,
+            fallback.utcMs,
+            fallback.hasTimezone,
+            cameraTimezone,
+            restoreToleranceSeconds,
+          );
         }
       }
       return file;
     }).toList();
+  }
+
+  /// EXIF フォールバックを適用した MediaFile を生成する
+  MediaFile _copyMediaFileWithExifDateTime(
+    MediaFile file,
+    DateTime exifDateTimeLocal,
+    int? exifDateTimeUtcMs,
+    bool hasExifTimezone,
+    String cameraTimezone,
+    int restoreToleranceSeconds,
+  ) {
+    final referenceUtcMs = _getReferenceUtcMs((
+      creationTimeUtcMs: file.sourceCreatedTimeUtcMs,
+      modifiedTimeUtcMs: file.sourceModifiedTimeUtcMs,
+    ));
+    final resolvedTimes = _resolveCaptureTimes(
+      exifLocalDateTime: exifDateTimeLocal,
+      exifUtcMs: exifDateTimeUtcMs,
+      hasExifTimezone: hasExifTimezone,
+      sourceReferenceUtcMs: referenceUtcMs,
+      cameraTimezone: cameraTimezone,
+      restoreToleranceSeconds: restoreToleranceSeconds,
+    );
+    final captureLocalDateTime = _resolveCaptureLocalDateTime(
+      exifDateTimeLocal,
+      resolvedTimes.captureStartUtcMs,
+      cameraTimezone,
+    );
+
+    return MediaFile(
+      relativePath: file.relativePath,
+      fileName: file.fileName,
+      baseName: file.baseName,
+      extension: file.extension,
+      type: file.type,
+      fileSize: file.fileSize,
+      exifDateTimeLocal: exifDateTimeLocal,
+      exifDateTimeUtcMs: exifDateTimeUtcMs,
+      hasExifTimezone: hasExifTimezone,
+      sourceCreatedTimeUtcMs: file.sourceCreatedTimeUtcMs,
+      sourceModifiedTimeUtcMs: file.sourceModifiedTimeUtcMs,
+      capturedStartTimeUtcMs: resolvedTimes.captureStartUtcMs,
+      capturedEndTimeUtcMs: resolvedTimes.captureStartUtcMs,
+      captureLocalDateTime: captureLocalDateTime,
+      sdCardRoot: file.sdCardRoot,
+      xxHash: file.xxHash,
+    );
+  }
+
+  /// 撮影日時を確定する
+  ({int captureStartUtcMs}) _resolveCaptureTimes({
+    required DateTime? exifLocalDateTime,
+    required int? exifUtcMs,
+    required bool hasExifTimezone,
+    required int sourceReferenceUtcMs,
+    required String cameraTimezone,
+    required int restoreToleranceSeconds,
+  }) {
+    if (exifLocalDateTime == null) {
+      return (captureStartUtcMs: sourceReferenceUtcMs);
+    }
+
+    if (hasExifTimezone && exifUtcMs != null) {
+      return (captureStartUtcMs: exifUtcMs);
+    }
+
+    final cameraOffset = getTimezoneOffsetDuration(cameraTimezone);
+    final cameraBasedUtcMs = cameraOffset == null
+        ? null
+        : _toUtcDateTime(exifLocalDateTime, cameraOffset).millisecondsSinceEpoch;
+
+    if (cameraBasedUtcMs != null &&
+        _isWithinTolerance(cameraBasedUtcMs, sourceReferenceUtcMs, restoreToleranceSeconds)) {
+      return (captureStartUtcMs: cameraBasedUtcMs);
+    }
+
+    final inferredOffset = _inferOffsetFromSource(
+      exifLocalDateTime,
+      sourceReferenceUtcMs,
+      restoreToleranceSeconds,
+    );
+    if (inferredOffset != null) {
+      return (captureStartUtcMs: _toUtcDateTime(exifLocalDateTime, inferredOffset).millisecondsSinceEpoch);
+    }
+
+    if (cameraBasedUtcMs != null) {
+      return (captureStartUtcMs: cameraBasedUtcMs);
+    }
+
+    return (captureStartUtcMs: sourceReferenceUtcMs);
+  }
+
+  /// サブフォルダ命名に使用するローカル日時を解決する
+  DateTime _resolveCaptureLocalDateTime(
+    DateTime? exifLocalDateTime,
+    int captureStartUtcMs,
+    String cameraTimezone,
+  ) {
+    if (exifLocalDateTime != null) {
+      return exifLocalDateTime;
+    }
+
+    final cameraOffset = getTimezoneOffsetDuration(cameraTimezone);
+    if (cameraOffset != null) {
+      return DateTime.fromMillisecondsSinceEpoch(captureStartUtcMs, isUtc: true).add(cameraOffset);
+    }
+
+    return DateTime.fromMillisecondsSinceEpoch(captureStartUtcMs, isUtc: true).toLocal();
+  }
+
+  /// 撮影終了日時を計算する
+  int _resolveCaptureEndUtcMs({
+    required int capturedStartUtcMs,
+    required int? durationFrames,
+    required double? frameRate,
+  }) {
+    if (durationFrames == null || frameRate == null || frameRate <= 0) {
+      return capturedStartUtcMs;
+    }
+
+    final durationSeconds = durationFrames / frameRate;
+    final durationMs = (durationSeconds * 1000).round();
+    return capturedStartUtcMs + durationMs;
+  }
+
+  /// 取り込み元ファイルの作成・更新時刻を取得する
+  Future<({int creationTimeUtcMs, int modifiedTimeUtcMs})> _getSourceFileTimes(
+    File file,
+    FileStat stat,
+  ) async {
+    try {
+      return await getFileTimes(file.path);
+    } catch (_) {
+      final fallbackUtc = stat.modified.toUtc().millisecondsSinceEpoch;
+      return (creationTimeUtcMs: fallbackUtc, modifiedTimeUtcMs: fallbackUtc);
+    }
+  }
+
+  /// 作成日時と更新日時のうち古い方を取得する
+  int _getReferenceUtcMs(
+    ({int creationTimeUtcMs, int modifiedTimeUtcMs}) sourceTimes,
+  ) {
+    return sourceTimes.creationTimeUtcMs <= sourceTimes.modifiedTimeUtcMs
+        ? sourceTimes.creationTimeUtcMs
+        : sourceTimes.modifiedTimeUtcMs;
+  }
+
+  /// 許容誤差内かどうかを判定する
+  bool _isWithinTolerance(
+    int candidateUtcMs,
+    int referenceUtcMs,
+    int restoreToleranceSeconds,
+  ) {
+    final diffSeconds = (candidateUtcMs - referenceUtcMs).abs() / Duration.millisecondsPerSecond;
+    return diffSeconds <= restoreToleranceSeconds;
+  }
+
+  /// ファイル時刻からタイムゾーンを推測する
+  Duration? _inferOffsetFromSource(
+    DateTime exifLocalDateTime,
+    int sourceReferenceUtcMs,
+    int restoreToleranceSeconds,
+  ) {
+    const inferenceUnitMinutes = 30;
+    const maxOffsetHours = 18;
+
+    final inferredOffset = _calculateOffsetFromSource(
+      exifLocalDateTime,
+      sourceReferenceUtcMs,
+    );
+    if (inferredOffset == null) {
+      return null;
+    }
+
+    if (inferredOffset.inMinutes.abs() > maxOffsetHours * 60) {
+      return null;
+    }
+
+    final remainder = inferredOffset.inMinutes.abs() % inferenceUnitMinutes;
+    if (remainder != 0) {
+      return null;
+    }
+
+    if (inferredOffset.inSeconds.abs() <= restoreToleranceSeconds) {
+      return null;
+    }
+
+    return inferredOffset;
+  }
+
+  /// ファイル時刻から推測されるタイムゾーンオフセットを計算する
+  Duration? _calculateOffsetFromSource(
+    DateTime exifLocalDateTime,
+    int sourceReferenceUtcMs,
+  ) {
+    final exifFloatingUtc = DateTime.utc(
+      exifLocalDateTime.year,
+      exifLocalDateTime.month,
+      exifLocalDateTime.day,
+      exifLocalDateTime.hour,
+      exifLocalDateTime.minute,
+      exifLocalDateTime.second,
+      exifLocalDateTime.millisecond,
+      exifLocalDateTime.microsecond,
+    );
+
+    final sourceReferenceUtc = DateTime.fromMillisecondsSinceEpoch(
+      sourceReferenceUtcMs,
+      isUtc: true,
+    );
+
+    return exifFloatingUtc.difference(sourceReferenceUtc);
+  }
+
+  /// ローカル時刻とオフセットから UTC を算出する
+  DateTime _toUtcDateTime(DateTime localDateTime, Duration offset) {
+    return DateTime.utc(
+      localDateTime.year,
+      localDateTime.month,
+      localDateTime.day,
+      localDateTime.hour,
+      localDateTime.minute,
+      localDateTime.second,
+      localDateTime.millisecond,
+      localDateTime.microsecond,
+    ).subtract(offset);
   }
 
   /// フォルダ単位でベース名の一致判定に使うキーを生成する
@@ -401,27 +652,12 @@ class SonyFilesystemService {
     return '$directory|${file.baseName}';
   }
 
-  /// EXIF 日時のみを差し替えた MediaFile を生成する
-  MediaFile _copyMediaFileWithExifDateTime(MediaFile file, DateTime exifDateTime) {
-    return MediaFile(
-      relativePath: file.relativePath,
-      fileName: file.fileName,
-      baseName: file.baseName,
-      extension: file.extension,
-      type: file.type,
-      fileSize: file.fileSize,
-      exifDateTime: exifDateTime,
-      fileModifiedTime: file.fileModifiedTime,
-      sdCardRoot: file.sdCardRoot,
-      xxHash: file.xxHash,
-    );
-  }
-
   /// フォルダ内の静止画をスキャン
   Future<List<MediaFile>> _scanPhotosInFolder(
     String folderPath,
     List<ImportWarning> warnings, {
     required String cameraTimezone,
+    required int restoreToleranceSeconds,
   }) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
@@ -445,6 +681,7 @@ class SonyFilesystemService {
               entity,
               isProxyFolder: false,
               cameraTimezone: cameraTimezone,
+              restoreToleranceSeconds: restoreToleranceSeconds,
             );
             if (mediaFile != null) {
               files.add(mediaFile);
@@ -468,6 +705,7 @@ class SonyFilesystemService {
     required bool includeXml,
     required List<ImportWarning> warnings,
     required String cameraTimezone,
+    required int restoreToleranceSeconds,
   }) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
@@ -493,6 +731,7 @@ class SonyFilesystemService {
               entity,
               isProxyFolder: isProxyFolder,
               cameraTimezone: cameraTimezone,
+              restoreToleranceSeconds: restoreToleranceSeconds,
             );
             if (mediaFile != null) {
               files.add(mediaFile);
@@ -504,6 +743,7 @@ class SonyFilesystemService {
               entity,
               isProxyFolder: false,
               cameraTimezone: cameraTimezone,
+              restoreToleranceSeconds: restoreToleranceSeconds,
             );
             if (mediaFile != null) {
               files.add(mediaFile);
@@ -530,7 +770,10 @@ class SonyFilesystemService {
       final extension = getExtension(fileName).toLowerCase();
       final baseName = getBaseName(fileName);
       final stat = await file.stat();
+      final sourceTimes = await _getSourceFileTimes(file, stat);
       final relativePath = _getRelativePath(file.path);
+      final referenceUtcMs = _getReferenceUtcMs(sourceTimes);
+      final captureLocalDateTime = DateTime.fromMillisecondsSinceEpoch(referenceUtcMs, isUtc: true).toLocal();
 
       final mediaFile = MediaFile(
         relativePath: relativePath,
@@ -539,8 +782,14 @@ class SonyFilesystemService {
         extension: extension,
         type: MediaType.Unknown,
         fileSize: stat.size,
-        exifDateTime: null,
-        fileModifiedTime: stat.modified,
+        exifDateTimeLocal: null,
+        exifDateTimeUtcMs: null,
+        hasExifTimezone: false,
+        sourceCreatedTimeUtcMs: sourceTimes.creationTimeUtcMs,
+        sourceModifiedTimeUtcMs: sourceTimes.modifiedTimeUtcMs,
+        capturedStartTimeUtcMs: referenceUtcMs,
+        capturedEndTimeUtcMs: referenceUtcMs,
+        captureLocalDateTime: captureLocalDateTime,
         sdCardRoot: rootPath,
       );
 
@@ -561,6 +810,7 @@ class SonyFilesystemService {
     File file, {
     required bool isProxyFolder,
     required String cameraTimezone,
+    required int restoreToleranceSeconds,
   }) async {
     try {
       final fileName = p.basename(file.path);
@@ -573,22 +823,57 @@ class SonyFilesystemService {
 
       // ファイル情報を取得
       final stat = await file.stat();
+      final sourceTimes = await _getSourceFileTimes(file, stat);
+      final referenceUtcMs = _getReferenceUtcMs(sourceTimes);
       final relativePath = _getRelativePath(file.path);
 
       // EXIF/メタデータから日時を取得
-      DateTime? exifDateTime;
+      DateTime? exifDateTimeLocal;
+      int? exifDateTimeUtcMs;
+      bool hasExifTimezone = false;
+      int? durationFrames;
+      double? frameRate;
+
       if (mediaType.isPhoto) {
         final exifData = await readExifDateTime(
           file,
           cameraTimezone: cameraTimezone,
         );
-        exifDateTime = exifData.bestDateTime;
+        exifDateTimeLocal = exifData.bestLocalDateTime;
+        exifDateTimeUtcMs = exifData.bestUtcDateTime?.millisecondsSinceEpoch;
+        hasExifTimezone = exifData.hasTimezoneOffset;
       } else if (mediaType == MediaType.Video) {
-        exifDateTime = await readVideoDateTime(
+        final videoDateTime = await readVideoDateTime(
           file,
           cameraTimezone: cameraTimezone,
         );
+        exifDateTimeLocal = videoDateTime?.localDateTime;
+        exifDateTimeUtcMs = videoDateTime?.utcDateTime?.millisecondsSinceEpoch;
+        hasExifTimezone = videoDateTime?.hasTimezoneOffset ?? false;
+        durationFrames = videoDateTime?.durationFrames;
+        frameRate = videoDateTime?.frameRate;
       }
+
+      final resolvedTimes = _resolveCaptureTimes(
+        exifLocalDateTime: exifDateTimeLocal,
+        exifUtcMs: exifDateTimeUtcMs,
+        hasExifTimezone: hasExifTimezone,
+        sourceReferenceUtcMs: referenceUtcMs,
+        cameraTimezone: cameraTimezone,
+        restoreToleranceSeconds: restoreToleranceSeconds,
+      );
+
+      final capturedStartUtcMs = resolvedTimes.captureStartUtcMs;
+      final captureLocalDateTime = _resolveCaptureLocalDateTime(
+        exifDateTimeLocal,
+        capturedStartUtcMs,
+        cameraTimezone,
+      );
+      final capturedEndUtcMs = _resolveCaptureEndUtcMs(
+        capturedStartUtcMs: capturedStartUtcMs,
+        durationFrames: durationFrames,
+        frameRate: frameRate,
+      );
 
       return MediaFile(
         relativePath: relativePath,
@@ -597,8 +882,14 @@ class SonyFilesystemService {
         extension: ext,
         type: mediaType,
         fileSize: stat.size,
-        exifDateTime: exifDateTime,
-        fileModifiedTime: stat.modified,
+        exifDateTimeLocal: exifDateTimeLocal,
+        exifDateTimeUtcMs: exifDateTimeUtcMs,
+        hasExifTimezone: hasExifTimezone,
+        sourceCreatedTimeUtcMs: sourceTimes.creationTimeUtcMs,
+        sourceModifiedTimeUtcMs: sourceTimes.modifiedTimeUtcMs,
+        capturedStartTimeUtcMs: capturedStartUtcMs,
+        capturedEndTimeUtcMs: capturedEndUtcMs,
+        captureLocalDateTime: captureLocalDateTime,
         sdCardRoot: rootPath,
       );
     } catch (_) {

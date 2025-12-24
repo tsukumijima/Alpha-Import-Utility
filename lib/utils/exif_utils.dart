@@ -14,31 +14,55 @@ import 'timezone_utils.dart';
 
 /// EXIF から読み取った日時情報
 class ExifDateTime {
-  /// 撮影日時（EXIF DateTimeOriginal）
-  final DateTime? dateTimeOriginal;
+  /// 撮影日時（EXIF DateTimeOriginal, カメラのローカル時刻）
+  final DateTime? dateTimeOriginalLocal;
 
-  /// デジタル化日時（EXIF DateTimeDigitized）
-  final DateTime? dateTimeDigitized;
+  /// 撮影日時（EXIF DateTimeOriginal, UTC）
+  final DateTime? dateTimeOriginalUtc;
 
-  /// 変更日時（EXIF DateTime）
-  final DateTime? dateTime;
+  /// デジタル化日時（EXIF DateTimeDigitized, カメラのローカル時刻）
+  final DateTime? dateTimeDigitizedLocal;
 
+  /// デジタル化日時（EXIF DateTimeDigitized, UTC）
+  final DateTime? dateTimeDigitizedUtc;
+
+  /// 変更日時（EXIF DateTime, カメラのローカル時刻）
+  final DateTime? dateTimeLocal;
+
+  /// 変更日時（EXIF DateTime, UTC）
+  final DateTime? dateTimeUtc;
+
+  /// EXIF にタイムゾーン情報が含まれていたか
+  final bool hasTimezoneOffset;
+
+  /// EXIF 日時情報を生成する
   ExifDateTime({
-    this.dateTimeOriginal,
-    this.dateTimeDigitized,
-    this.dateTime,
+    this.dateTimeOriginalLocal,
+    this.dateTimeOriginalUtc,
+    this.dateTimeDigitizedLocal,
+    this.dateTimeDigitizedUtc,
+    this.dateTimeLocal,
+    this.dateTimeUtc,
+    this.hasTimezoneOffset = false,
   });
 
-  /// 最も信頼できる日時を取得
+  /// 最も信頼できる日時（カメラのローカル時刻）を取得
   ///
   /// 優先順位: DateTimeOriginal > DateTimeDigitized > DateTime
-  DateTime? get bestDateTime {
-    return dateTimeOriginal ?? dateTimeDigitized ?? dateTime;
+  DateTime? get bestLocalDateTime {
+    return dateTimeOriginalLocal ?? dateTimeDigitizedLocal ?? dateTimeLocal;
+  }
+
+  /// 最も信頼できる日時（UTC）を取得
+  ///
+  /// 優先順位: DateTimeOriginal > DateTimeDigitized > DateTime
+  DateTime? get bestUtcDateTime {
+    return dateTimeOriginalUtc ?? dateTimeDigitizedUtc ?? dateTimeUtc;
   }
 
   /// いずれかの日時が取得できたか
   bool get hasAnyDateTime {
-    return dateTimeOriginal != null || dateTimeDigitized != null || dateTime != null;
+    return bestLocalDateTime != null || bestUtcDateTime != null;
   }
 }
 
@@ -55,8 +79,8 @@ class ExifDateTime {
 ///   File('DSC00001.ARW'),
 ///   cameraTimezone: 'Asia/Tokyo',
 /// );
-/// if (exifDateTime.bestDateTime != null) {
-///   print('撮影日時: ${exifDateTime.bestDateTime}');
+/// if (exifDateTime.bestLocalDateTime != null) {
+///   print('撮影日時: ${exifDateTime.bestLocalDateTime}');
 /// }
 /// ```
 Future<ExifDateTime> readExifDateTime(
@@ -80,22 +104,28 @@ Future<ExifDateTime> readExifDateTime(
       final offsetDefault =
           _parseExifOffsetTag(exif.tags['EXIF OffsetTime']) ?? _parseExifOffsetTag(exif.tags['Image OffsetTime']);
 
+      final hasTimezoneOffset = offsetOriginal != null || offsetDigitized != null || offsetDefault != null;
+
       return ExifDateTime(
-        dateTimeOriginal: _applyTimezoneOffset(
+        dateTimeOriginalLocal: dateTimeOriginal,
+        dateTimeOriginalUtc: _applyTimezoneOffset(
           dateTimeOriginal,
           offsetOriginal ?? offsetDefault,
           cameraTimezone,
         ),
-        dateTimeDigitized: _applyTimezoneOffset(
+        dateTimeDigitizedLocal: dateTimeDigitized,
+        dateTimeDigitizedUtc: _applyTimezoneOffset(
           dateTimeDigitized,
           offsetDigitized ?? offsetDefault,
           cameraTimezone,
         ),
-        dateTime: _applyTimezoneOffset(
+        dateTimeLocal: dateTime,
+        dateTimeUtc: _applyTimezoneOffset(
           dateTime,
           offsetDefault,
           cameraTimezone,
         ),
+        hasTimezoneOffset: hasTimezoneOffset,
       );
     } finally {
       await source.close();
@@ -160,10 +190,15 @@ DateTime? _applyTimezoneOffset(
 
   final offset = exifOffset ?? getTimezoneOffsetDuration(cameraTimezone);
   if (offset == null) {
-    return localDateTime;
+    return null;
   }
 
-  final utc = DateTime.utc(
+  return _toUtcDateTime(localDateTime, offset);
+}
+
+/// ローカル時刻とオフセットから UTC を算出する
+DateTime _toUtcDateTime(DateTime localDateTime, Duration offset) {
+  return DateTime.utc(
     localDateTime.year,
     localDateTime.month,
     localDateTime.day,
@@ -173,8 +208,6 @@ DateTime? _applyTimezoneOffset(
     localDateTime.millisecond,
     localDateTime.microsecond,
   ).subtract(offset);
-
-  return utc.toLocal();
 }
 
 /// 動画 XML ファイル（NonRealTimeMeta）から撮影日時を読み取る
@@ -191,7 +224,38 @@ DateTime? _applyTimezoneOffset(
 ///   print('撮影日時: $dateTime');
 /// }
 /// ```
-Future<DateTime?> readVideoXmlDateTime(
+/// 動画 XML から読み取った日時情報
+class VideoDateTime {
+  /// 撮影日時（カメラのローカル時刻）
+  final DateTime? localDateTime;
+
+  /// 撮影日時（UTC）
+  final DateTime? utcDateTime;
+
+  /// 収録フレーム数
+  final int? durationFrames;
+
+  /// フレームレート
+  final double? frameRate;
+
+  /// XML にタイムゾーン情報が含まれていたか
+  final bool hasTimezoneOffset;
+
+  /// 動画 XML から読み取った日時情報を生成する
+  const VideoDateTime({
+    required this.localDateTime,
+    required this.utcDateTime,
+    required this.durationFrames,
+    required this.frameRate,
+    required this.hasTimezoneOffset,
+  });
+}
+
+/// 動画 XML ファイルから撮影日時を読み取る
+///
+/// CreationDate と動画フレーム情報（Duration, VideoFrame）を解析し、
+/// UTC とローカル時刻を返す。
+Future<VideoDateTime?> readVideoXmlDateTime(
   File xmlFile, {
   required String cameraTimezone,
 }) async {
@@ -214,29 +278,46 @@ Future<DateTime?> readVideoXmlDateTime(
 
     // ISO 8601 形式でパース
     final hasOffset = RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(valueAttr);
-    final parsed = DateTime.parse(valueAttr);
+    final local = _parseIsoLocalDateTime(valueAttr);
+
+    final durationFrames = _parseXmlIntAttribute(
+      document,
+      'Duration',
+      'value',
+    );
+    final frameRate = _parseFrameRate(document);
 
     if (hasOffset) {
-      return parsed.toLocal();
+      final utc = DateTime.parse(valueAttr).toUtc();
+      return VideoDateTime(
+        localDateTime: local,
+        utcDateTime: utc,
+        durationFrames: durationFrames,
+        frameRate: frameRate,
+        hasTimezoneOffset: true,
+      );
     }
 
     final cameraOffset = getTimezoneOffsetDuration(cameraTimezone);
-    if (cameraOffset == null) {
-      return parsed;
+    if (cameraOffset == null || local == null) {
+      return VideoDateTime(
+        localDateTime: local,
+        utcDateTime: null,
+        durationFrames: durationFrames,
+        frameRate: frameRate,
+        hasTimezoneOffset: false,
+      );
     }
 
-    final utc = DateTime.utc(
-      parsed.year,
-      parsed.month,
-      parsed.day,
-      parsed.hour,
-      parsed.minute,
-      parsed.second,
-      parsed.millisecond,
-      parsed.microsecond,
-    ).subtract(cameraOffset);
+    final utc = _toUtcDateTime(local, cameraOffset);
 
-    return utc.toLocal();
+    return VideoDateTime(
+      localDateTime: local,
+      utcDateTime: utc,
+      durationFrames: durationFrames,
+      frameRate: frameRate,
+      hasTimezoneOffset: false,
+    );
   } catch (ex) {
     // XML パースエラーまたは日付パースエラー
     return null;
@@ -284,7 +365,7 @@ Future<File?> findVideoXmlFile(File videoFile) async {
 /// ```dart
 /// final dateTime = await readVideoDateTime(File('C0079.MP4'));
 /// ```
-Future<DateTime?> readVideoDateTime(
+Future<VideoDateTime?> readVideoDateTime(
   File videoFile, {
   required String cameraTimezone,
 }) async {
@@ -297,4 +378,54 @@ Future<DateTime?> readVideoDateTime(
     xmlFile,
     cameraTimezone: cameraTimezone,
   );
+}
+
+/// ISO 8601 文字列からローカル時刻（タイムゾーン無し）を取得する
+DateTime? _parseIsoLocalDateTime(String isoString) {
+  final match = RegExp(
+    r'^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})',
+  ).firstMatch(isoString);
+  if (match == null) {
+    return null;
+  }
+
+  return DateTime(
+    int.parse(match.group(1)!),
+    int.parse(match.group(2)!),
+    int.parse(match.group(3)!),
+    int.parse(match.group(4)!),
+    int.parse(match.group(5)!),
+    int.parse(match.group(6)!),
+  );
+}
+
+/// XML 要素の整数属性をパースする
+int? _parseXmlIntAttribute(
+  XmlDocument document,
+  String elementName,
+  String attributeName,
+) {
+  final elements = document.findAllElements(elementName);
+  if (elements.isEmpty) {
+    return null;
+  }
+  final value = elements.first.getAttribute(attributeName);
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  return int.tryParse(value);
+}
+
+/// XML からフレームレートをパースする
+double? _parseFrameRate(XmlDocument document) {
+  final elements = document.findAllElements('VideoFrame');
+  if (elements.isEmpty) {
+    return null;
+  }
+  final value = elements.first.getAttribute('captureFps') ?? elements.first.getAttribute('formatFps');
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  final normalized = value.replaceAll('p', '').replaceAll('i', '');
+  return double.tryParse(normalized);
 }

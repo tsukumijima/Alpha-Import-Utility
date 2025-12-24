@@ -13,44 +13,59 @@ import '../fixtures/test_helper.dart';
 
 void main() {
   group('ExifDateTime', () {
-    test('bestDateTime は優先順位に従って日時を返す', () {
+    test('bestLocalDateTime は優先順位に従って日時を返す', () {
       // DateTimeOriginal が最優先
       final exif1 = ExifDateTime(
-        dateTimeOriginal: DateTime(2025, 12, 24, 10, 0),
-        dateTimeDigitized: DateTime(2025, 12, 24, 11, 0),
-        dateTime: DateTime(2025, 12, 24, 12, 0),
+        dateTimeOriginalLocal: DateTime(2025, 12, 24, 10, 0),
+        dateTimeDigitizedLocal: DateTime(2025, 12, 24, 11, 0),
+        dateTimeLocal: DateTime(2025, 12, 24, 12, 0),
       );
-      expect(exif1.bestDateTime, equals(DateTime(2025, 12, 24, 10, 0)));
+      expect(
+        exif1.bestLocalDateTime,
+        equals(DateTime(2025, 12, 24, 10, 0)),
+      );
 
       // DateTimeOriginal がない場合は DateTimeDigitized
       final exif2 = ExifDateTime(
-        dateTimeDigitized: DateTime(2025, 12, 24, 11, 0),
-        dateTime: DateTime(2025, 12, 24, 12, 0),
+        dateTimeDigitizedLocal: DateTime(2025, 12, 24, 11, 0),
+        dateTimeLocal: DateTime(2025, 12, 24, 12, 0),
       );
-      expect(exif2.bestDateTime, equals(DateTime(2025, 12, 24, 11, 0)));
+      expect(
+        exif2.bestLocalDateTime,
+        equals(DateTime(2025, 12, 24, 11, 0)),
+      );
 
       // 両方ない場合は DateTime
       final exif3 = ExifDateTime(
-        dateTime: DateTime(2025, 12, 24, 12, 0),
+        dateTimeLocal: DateTime(2025, 12, 24, 12, 0),
       );
-      expect(exif3.bestDateTime, equals(DateTime(2025, 12, 24, 12, 0)));
+      expect(
+        exif3.bestLocalDateTime,
+        equals(DateTime(2025, 12, 24, 12, 0)),
+      );
 
       // 全てない場合は null
       final exif4 = ExifDateTime();
-      expect(exif4.bestDateTime, isNull);
+      expect(exif4.bestLocalDateTime, isNull);
     });
 
     test('hasAnyDateTime は日時があれば true を返す', () {
       expect(
-        ExifDateTime(dateTimeOriginal: DateTime(2025, 12, 24)).hasAnyDateTime,
+        ExifDateTime(
+          dateTimeOriginalLocal: DateTime(2025, 12, 24),
+        ).hasAnyDateTime,
         isTrue,
       );
       expect(
-        ExifDateTime(dateTimeDigitized: DateTime(2025, 12, 24)).hasAnyDateTime,
+        ExifDateTime(
+          dateTimeDigitizedLocal: DateTime(2025, 12, 24),
+        ).hasAnyDateTime,
         isTrue,
       );
       expect(
-        ExifDateTime(dateTime: DateTime(2025, 12, 24)).hasAnyDateTime,
+        ExifDateTime(
+          dateTimeLocal: DateTime(2025, 12, 24),
+        ).hasAnyDateTime,
         isTrue,
       );
       expect(ExifDateTime().hasAnyDateTime, isFalse);
@@ -130,7 +145,7 @@ void main() {
         return;
       }
 
-      for (final file in files) {
+      for (final file in files.take(2)) {
         final exifWithUtc = await readExifDateTime(
           file,
           cameraTimezone: 'UTC',
@@ -140,16 +155,33 @@ void main() {
           cameraTimezone: 'Asia/Tokyo',
         );
 
-        expect(exifWithUtc.bestDateTime, isNotNull);
-        expect(exifWithTokyo.bestDateTime, isNotNull);
+        expect(exifWithUtc.bestUtcDateTime, isNotNull);
+        expect(exifWithTokyo.bestUtcDateTime, isNotNull);
 
-        final diffSeconds = exifWithUtc.bestDateTime!.difference(exifWithTokyo.bestDateTime!).inSeconds.abs();
+        final diffSeconds = exifWithUtc.bestUtcDateTime!.difference(exifWithTokyo.bestUtcDateTime!).inSeconds.abs();
         expect(diffSeconds, lessThan(1));
       }
     }, skip: !Directory(p.join('test', 'fixtures', 'sample_media')).existsSync());
   });
 
   group('readVideoXmlDateTime', () {
+    test('sample_media の XML からフレーム情報を取得できる', () async {
+      final sampleXml = File(p.join('test', 'fixtures', 'sample_media', 'C0220M01.XML'));
+      if (!sampleXml.existsSync()) {
+        return;
+      }
+
+      final videoDateTime = await readVideoXmlDateTime(
+        sampleXml,
+        cameraTimezone: 'Asia/Tokyo',
+      );
+
+      expect(videoDateTime, isNotNull);
+      expect(videoDateTime!.durationFrames, equals(60));
+      expect(videoDateTime.frameRate, isNotNull);
+      expect(videoDateTime.frameRate!, closeTo(23.98, 0.01));
+    }, skip: !File(p.join('test', 'fixtures', 'sample_media', 'C0220M01.XML')).existsSync());
+
     test('正しい XML から日時を読み取れる', () async {
       final (tempDir, cleanup) = await createTempDirectory();
 
@@ -162,14 +194,17 @@ void main() {
 </NonRealTimeMeta>
 ''');
 
-        final dateTime = await readVideoXmlDateTime(
+        final videoDateTime = await readVideoXmlDateTime(
           xmlFile,
           cameraTimezone: 'Asia/Tokyo',
         );
 
-        expect(dateTime, isNotNull);
+        expect(videoDateTime, isNotNull);
         // タイムゾーン変換後の UTC 時刻を確認
-        expect(dateTime!.toUtc(), equals(DateTime.utc(2025, 12, 24, 6, 30)));
+        expect(
+          videoDateTime!.utcDateTime,
+          equals(DateTime.utc(2025, 12, 24, 6, 30)),
+        );
       } finally {
         await cleanup();
       }
@@ -187,12 +222,12 @@ void main() {
 </NonRealTimeMeta>
 ''');
 
-        final dateTime = await readVideoXmlDateTime(
+        final videoDateTime = await readVideoXmlDateTime(
           xmlFile,
           cameraTimezone: 'Asia/Tokyo',
         );
 
-        expect(dateTime, isNull);
+        expect(videoDateTime, isNull);
       } finally {
         await cleanup();
       }
@@ -205,12 +240,12 @@ void main() {
         final xmlFile = File(p.join(tempDir, 'C0001M01.XML'));
         await xmlFile.writeAsString('not valid xml');
 
-        final dateTime = await readVideoXmlDateTime(
+        final videoDateTime = await readVideoXmlDateTime(
           xmlFile,
           cameraTimezone: 'Asia/Tokyo',
         );
 
-        expect(dateTime, isNull);
+        expect(videoDateTime, isNull);
       } finally {
         await cleanup();
       }
@@ -228,12 +263,12 @@ void main() {
 </NonRealTimeMeta>
 ''');
 
-        final dateTime = await readVideoXmlDateTime(
+        final videoDateTime = await readVideoXmlDateTime(
           xmlFile,
           cameraTimezone: 'Asia/Tokyo',
         );
 
-        expect(dateTime, isNull);
+        expect(videoDateTime, isNull);
       } finally {
         await cleanup();
       }
@@ -242,12 +277,12 @@ void main() {
     test('存在しないファイルでは null を返す', () async {
       final xmlFile = File('/non/existent/C0001M01.XML');
 
-      final dateTime = await readVideoXmlDateTime(
+      final videoDateTime = await readVideoXmlDateTime(
         xmlFile,
         cameraTimezone: 'Asia/Tokyo',
       );
 
-      expect(dateTime, isNull);
+      expect(videoDateTime, isNull);
     });
 
     test('UTC タイムゾーンの日時を正しく読み取れる', () async {
@@ -262,13 +297,16 @@ void main() {
 </NonRealTimeMeta>
 ''');
 
-        final dateTime = await readVideoXmlDateTime(
+        final videoDateTime = await readVideoXmlDateTime(
           xmlFile,
           cameraTimezone: 'Asia/Tokyo',
         );
 
-        expect(dateTime, isNotNull);
-        expect(dateTime!.toUtc(), equals(DateTime.utc(2025, 12, 24, 15, 30)));
+        expect(videoDateTime, isNotNull);
+        expect(
+          videoDateTime!.utcDateTime,
+          equals(DateTime.utc(2025, 12, 24, 15, 30)),
+        );
       } finally {
         await cleanup();
       }

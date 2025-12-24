@@ -86,7 +86,7 @@ Sony α カメラの SD カード構造を検証し、取り込み対象ファ�
 **スキャン対象**:
 - 静止画: `.JPG`, `.JPEG`, `.ARW`, `.HIF`, `.HEIF`
 - 動画: `.MP4` (`PRIVATE/M4ROOT/CLIP/`)
-- プロキシ動画: `.MP4` (`PRIVATE/M4ROOT/SUB/`)
+- プロキシー動画: `.MP4` (`PRIVATE/M4ROOT/SUB/`)
 - メタデータ: `.XML` (NonRealTimeMeta)
 
 ### ImportEngine (`services/import_engine.dart`)
@@ -142,19 +142,21 @@ EXIF にタイムゾーン情報（`OffsetTimeOriginal` など）がある場合
 EXIF OffsetTimeOriginal → EXIF OffsetTime → cameraTimezone 設定
 ```
 
+撮影日時の内部表現は UTC ミリ秒（絶対時刻）で保持し、サブフォルダ命名や UI 表示にはカメラのローカル時刻を使います。
+
 ### 日時復元
 
-コピー後のファイルに EXIF の撮影日時を反映します。
+コピー後のファイルに EXIF/XML 由来の撮影日時を反映します。
 
-- **Windows**: PowerShell で `CreationTime`, `LastWriteTime` を設定
-- **macOS**: `SetFile` コマンドで作成日時を設定
+- **Windows**: MethodChannel 経由で Win32 API（`SetFileTime`）を使用
+- **macOS**: MethodChannel 経由で `URLResourceValues` を使用
 
-`SetFile` が利用できない環境（Xcode Command Line Tools 未インストール）では `UnsupportedError` をスローして中断します。
+ネイティブ実装が利用できない場合は異常とみなし、fail-fast で中断します。
 
 ### ファイル名規則
 
-- プロキシ動画: `{ベース名}_proxy.MP4`
-- 重複時: `{ベース名} (1).{拡張子}`, `{ベース名} (2).{拡張子}`, ...
+- **基本**: 取り込み元のファイル名を維持する
+- **重複時**: `{ベース名} (1).{拡張子}`, `{ベース名} (2).{拡張子}`, ...
 
 ---
 
@@ -221,6 +223,15 @@ test/
     ├── exif_utils_test.dart
     └── hash_utils_test.dart
 ```
+
+```
+integration_test/
+└── import_flow_test.dart  # MethodChannel を含む統合テスト
+```
+
+### MethodChannel の扱い
+
+Unit テストでは MethodChannel をモックしているため、ネイティブ実装の検証は integration_test で行う。integration_test は Windows/macOS の実環境で実行すること。
 
 ### テストヘルパーの使い方
 
@@ -299,7 +310,7 @@ SD_CARD_ROOT/
 ├── PRIVATE/
 │   ├── M4ROOT/
 │   │   ├── CLIP/       # 本編動画（MP4, XML）
-│   │   └── SUB/        # プロキシ動画
+│   │   └── SUB/        # プロキシー動画
 │   └── AIU/            # このアプリのメタデータ
 │       └── METADATA.JSON
 └── (その他 Sony 固有フォルダ)

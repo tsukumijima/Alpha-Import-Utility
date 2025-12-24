@@ -14,6 +14,10 @@ import 'package:alpha_import_utility/services/metadata_manager.dart';
 import '../fixtures/test_helper.dart';
 
 void main() {
+  setUpAll(() {
+    setUpFileTimeServiceMocks();
+  });
+
   group('ImportEngine', () {
     test('単一ファイルを取り込み、メタデータを記録する', () async {
       final (sdRoot, cleanupSd) = await createTempDirectory();
@@ -29,6 +33,7 @@ void main() {
 
         final settings = ImportSettings(
           destinationFolder: destRoot,
+          cameraTimezone: 'UTC',
           isRestoreDateTimeFromExif: false,
           isImportVideoXML: false,
           isImportProxyVideos: false,
@@ -46,7 +51,7 @@ void main() {
 
         final sourceFile = File(p.join(sdRoot, 'DCIM', '100MSDCF', 'DSC00001.JPG'));
         final fileStat = await sourceFile.stat();
-        final subfolder = settings.generateSubfolderPath(fileStat.modified);
+        final subfolder = settings.generateSubfolderPath(fileStat.modified.toUtc());
         final importedFile = File(p.join(settings.destinationFolder, subfolder, 'DSC00001.JPG'));
         expect(await importedFile.exists(), isTrue);
 

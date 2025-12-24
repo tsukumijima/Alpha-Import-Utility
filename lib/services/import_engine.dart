@@ -113,33 +113,39 @@ class ImportEngine {
       final mediaFiles = scanResult.mediaFiles;
       warnings.addAll(scanResult.warnings);
       mediaFiles.sort((a, b) {
-        final dateCompare = a.effectiveDateTime.compareTo(b.effectiveDateTime);
+        final dateCompare = a.effectiveDateTimeLocal.compareTo(b.effectiveDateTimeLocal);
         if (dateCompare != 0) {
           return dateCompare;
         }
         return a.relativePath.compareTo(b.relativePath);
       });
       _log.debug('Sorted media files by capture datetime.', tag: 'ImportEngine');
-      _log.info('Found ${mediaFiles.length} media files to import.', tag: 'ImportEngine');
+      _log.info('Found ${mediaFiles.length} media files in SD card.', tag: 'ImportEngine');
 
-      _log.logImportStarted(sdCardRoot, mediaFiles.length);
+      // Phase 4: 取り込み対象の確定
+      _log.debug('Phase 4: Determining import targets.', tag: 'ImportEngine');
+      final plan = await _buildImportTargets(mediaFiles, warnings);
+      final importTargets = plan.targets;
+      skippedCount += plan.skippedCount;
 
-      if (mediaFiles.isEmpty) {
+      _log.logImportStarted(sdCardRoot, importTargets.length);
+
+      if (importTargets.isEmpty) {
         _log.info('No files to import.', tag: 'ImportEngine');
         return ImportResult(
           successCount: 0,
-          skippedCount: 0,
-          warningCount: 0,
+          skippedCount: skippedCount,
+          warningCount: warnings.length,
           errorCount: 0,
-          warnings: [],
+          warnings: warnings,
           importedFiles: [],
           duration: stopwatch.elapsed,
         );
       }
 
-      // Phase 4: 容量チェック
-      _log.debug('Phase 4: Checking disk space.', tag: 'ImportEngine');
-      final totalSize = mediaFiles.fold<int>(0, (sum, f) => sum + f.fileSize);
+      // Phase 5: 容量チェック
+      _log.debug('Phase 5: Checking disk space.', tag: 'ImportEngine');
+      final totalSize = plan.totalSize;
       final availableSpace = await getAvailableDiskSpace(settings.destinationFolder);
       _log.debug(
         'Required: ${formatFileSize(totalSize)}, Available: ${availableSpace != null ? formatFileSize(availableSpace) : "unknown"}.',
@@ -157,16 +163,16 @@ class ImportEngine {
       // 保存先フォルダを作成
       await ensureDirectoryExists(settings.destinationFolder);
 
-      // Phase 5: 各ファイルの取り込み処理
-      _log.debug('Phase 5: Starting file import.', tag: 'ImportEngine');
+      // Phase 6: 各ファイルの取り込み処理
+      _log.debug('Phase 6: Starting file import.', tag: 'ImportEngine');
       var progress = ImportProgress(
         processedCount: 0,
-        totalCount: mediaFiles.length,
+        totalCount: importTargets.length,
         phase: 'Importing...',
       );
       _notifyProgress(progress);
 
-      for (final mediaFile in mediaFiles) {
+      for (final mediaFile in importTargets) {
         // キャンセルチェック
         if (_isCancelled) {
           return ImportResult.cancelled(
@@ -269,6 +275,63 @@ class ImportEngine {
     }
   }
 
+  /// 取り込み対象のファイルを確定する
+  ///
+  /// 既に取り込み済みのファイルを除外し、取り込み対象の合計サイズも算出する。
+  Future<({List<MediaFile> targets, int totalSize, int skippedCount})> _buildImportTargets(
+    List<MediaFile> mediaFiles,
+    List<ImportWarning> warnings,
+  ) async {
+    final targets = <MediaFile>[];
+    var totalSize = 0;
+    var skippedCount = 0;
+
+    for (final file in mediaFiles) {
+      // 書き込み中ファイルはスキップ
+      final sourceFile = File(file.absolutePath);
+      if (await isFileBeingWritten(sourceFile)) {
+        warnings.add(
+          ImportWarning(
+            type: ImportWarningType.FileInUseSkipped,
+            file: file,
+            message: 'File appears to be in use, skipping.',
+          ),
+        );
+        skippedCount++;
+        continue;
+      }
+
+      // 取り込み済みかどうかを確認
+      final existingRecord = await _metadataManager.findRecord(file.relativePath);
+      if (existingRecord != null) {
+        final destPath = p.join(settings.destinationFolder, existingRecord.destinationPath);
+        if (await File(destPath).exists()) {
+          skippedCount++;
+          continue;
+        }
+      } else {
+        // メタデータに記録がない場合はコピー先の同名ファイルを確認する
+        final destFolder = _getDestinationFolder(file);
+        final destPath = p.join(destFolder, file.fileName);
+        final destFile = File(destPath);
+
+        if (await destFile.exists()) {
+          file.xxHash ??= await computeFileHash(sourceFile);
+          final destHash = await computeFileHash(destFile);
+          if (hashesMatch(file.xxHash!, destHash)) {
+            skippedCount++;
+            continue;
+          }
+        }
+      }
+
+      targets.add(file);
+      totalSize += file.fileSize;
+    }
+
+    return (targets: targets, totalSize: totalSize, skippedCount: skippedCount);
+  }
+
   /// 単一ファイルの取り込み処理
   Future<_FileProcessResult> _processFile(
     MediaFile file,
@@ -282,20 +345,20 @@ class ImportEngine {
           ImportWarning(
             type: ImportWarningType.ExifReadFailed,
             file: file,
-            message: 'Failed to read EXIF datetime, using file modified time.',
+            message: 'Failed to read EXIF datetime, using source file time.',
           ),
         );
-      } else if (file.type == MediaType.Video && file.exifDateTime == null) {
+      } else if (file.type == MediaType.Video && file.exifDateTimeLocal == null) {
         warnings.add(
           ImportWarning(
             type: ImportWarningType.ExifReadFailed,
             file: file,
-            message: 'Failed to read video XML datetime, using file modified time.',
+            message: 'Failed to read video XML datetime, using source file time.',
           ),
         );
       }
 
-      // 書き込み中ファイルのチェック
+      // 書き込み中ファイルの再チェック（取り込み直前の安全確認）
       final sourceFile = File(file.absolutePath);
       if (await isFileBeingWritten(sourceFile)) {
         warnings.add(
@@ -306,43 +369,6 @@ class ImportEngine {
           ),
         );
         return _FileProcessResult.skipped;
-      }
-
-      // 取り込み済みかどうかを確認
-      final existingRecord = await _metadataManager.findRecord(file.relativePath);
-
-      if (existingRecord != null) {
-        // メタデータに記録がある場合
-        final destPath = p.join(settings.destinationFolder, existingRecord.destinationPath);
-        final destFile = File(destPath);
-
-        if (await destFile.exists()) {
-          // コピー先にファイルが存在する → スキップ
-          return _FileProcessResult.skipped;
-        } else {
-          // コピー先にファイルがない → PC 側で削除されたので再取り込み
-          // 記録は上書きされる
-        }
-      } else {
-        // メタデータに記録がない場合
-        // コピー先に同名ファイルがあるかチェック
-        final destFolder = _getDestinationFolder(file);
-        final destPath = p.join(destFolder, file.fileName);
-        final destFile = File(destPath);
-
-        if (await destFile.exists()) {
-          // 同名ファイルが存在 → ハッシュ比較
-          file.xxHash ??= await computeFileHash(sourceFile);
-          final destHash = await computeFileHash(destFile);
-
-          if (hashesMatch(file.xxHash!, destHash)) {
-            // 同一ファイル → スキップ
-            return _FileProcessResult.skipped;
-          } else {
-            // 別内容 → 別名で取り込み
-            // ファイル名は _copyFileWithHash 内で生成される
-          }
-        }
       }
 
       // ファイルをコピー
@@ -365,26 +391,49 @@ class ImportEngine {
 
   /// 取り込み先フォルダパスを取得
   String _getDestinationFolder(MediaFile file) {
-    final subfolderPath = settings.generateSubfolderPath(file.effectiveDateTime);
+    final subfolderPath = settings.generateSubfolderPath(file.effectiveDateTimeLocal);
     return p.join(settings.destinationFolder, subfolderPath);
   }
 
   /// 日時復元に使用するターゲット日時を解決
   ///
-  /// EXIF 日時が有効かつファイル日時との差が許容範囲外の場合のみ EXIF を使用する。
-  /// それ以外はファイルシステムの更新日時を優先する。
-  DateTime _resolveRestoreDateTime(MediaFile file) {
-    if (!file.isExifDateTimeValid) {
-      return file.fileModifiedTime;
+  /// 写真は作成/更新のうち古い方を基準に判定し、動画は開始/終了で判定する。
+  /// 許容誤差内であれば取り込み元の日時を維持し、ずれていれば撮影日時に統一する。
+  ({DateTime creationTimeUtc, DateTime modifiedTimeUtc}) _resolveRestoreDateTimes(
+    MediaFile file,
+  ) {
+    final tolerance = settings.dateRestoreToleranceSeconds;
+
+    if (file.type == MediaType.Video) {
+      final sourceCreationUtc = file.sourceCreatedTimeUtc;
+      final sourceModifiedUtc = file.sourceModifiedTimeUtc;
+      final startUtc = file.effectiveDateTimeUtc;
+      final endUtc = file.capturedEndTimeUtc;
+
+      final startDiff = startUtc.difference(sourceCreationUtc).inSeconds.abs();
+      final endDiff = endUtc.difference(sourceModifiedUtc).inSeconds.abs();
+
+      if (startDiff <= tolerance && endDiff <= tolerance) {
+        return (
+          creationTimeUtc: sourceCreationUtc,
+          modifiedTimeUtc: sourceModifiedUtc,
+        );
+      }
+
+      return (creationTimeUtc: startUtc, modifiedTimeUtc: endUtc);
     }
 
-    final exifDateTime = file.exifDateTime!;
-    final diffSeconds = exifDateTime.difference(file.fileModifiedTime).inSeconds.abs();
-    if (diffSeconds <= settings.dateRestoreToleranceSeconds) {
-      return file.fileModifiedTime;
+    final sourceReferenceUtc = file.sourceReferenceTimeUtc;
+    final captureUtc = file.effectiveDateTimeUtc;
+    final diffSeconds = captureUtc.difference(sourceReferenceUtc).inSeconds.abs();
+    if (diffSeconds <= tolerance) {
+      return (
+        creationTimeUtc: sourceReferenceUtc,
+        modifiedTimeUtc: sourceReferenceUtc,
+      );
     }
 
-    return exifDateTime;
+    return (creationTimeUtc: captureUtc, modifiedTimeUtc: captureUtc);
   }
 
   /// ファイルをコピーしてハッシュを計算
@@ -402,20 +451,11 @@ class ImportEngine {
     // ファイル名を決定（重複時はサフィックス付与）
     var destFileName = file.fileName;
 
-    // プロキシ動画の場合、ファイル名が本編と衝突する可能性があるか確認
-    if (file.type == MediaType.ProxyVideo) {
-      final mainVideoPath = p.join(destFolder, file.fileName);
-      if (await File(mainVideoPath).exists()) {
-        // 衝突する場合は _proxy サフィックスを付与
-        destFileName = '${file.baseName}_proxy${file.extension}';
-      }
-    }
-
     // 既存ファイルとの重複チェック
     destFileName = await generateUniqueFileName(Directory(destFolder), destFileName);
 
     // 元のファイル名と異なる場合は警告を記録
-    if (destFileName != file.fileName && !(file.type == MediaType.ProxyVideo && destFileName.contains('_proxy'))) {
+    if (destFileName != file.fileName) {
       warnings.add(
         ImportWarning(
           type: ImportWarningType.DuplicateRenamed,
@@ -470,8 +510,12 @@ class ImportEngine {
         // 日時復元
         if (settings.isRestoreDateTimeFromExif) {
           try {
-            final targetDateTime = _resolveRestoreDateTime(file);
-            await restoreFileDateTime(destFile, targetDateTime);
+            final targetTimes = _resolveRestoreDateTimes(file);
+            await restoreFileDateTime(
+              file: destFile,
+              creationTimeUtc: targetTimes.creationTimeUtc,
+              modifiedTimeUtc: targetTimes.modifiedTimeUtc,
+            );
           } on UnsupportedError {
             rethrow;
           } catch (ex) {
@@ -486,7 +530,7 @@ class ImportEngine {
         }
 
         // 相対パスを記録
-        final relativeDestPath = settings.generateSubfolderPath(file.effectiveDateTime);
+        final relativeDestPath = settings.generateSubfolderPath(file.effectiveDateTimeLocal);
         _lastDestinationPath = p.join(relativeDestPath, destFileName);
 
         // 成功

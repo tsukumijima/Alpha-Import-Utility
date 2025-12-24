@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:disks_desktop/disks_desktop.dart';
 import 'package:path/path.dart' as p;
 
+import 'file_time_service.dart';
 import 'sony_filesystem.dart';
 import 'logging_service.dart';
 
@@ -293,7 +294,10 @@ class DeviceDetector {
       final validation = await sonyFs.validate();
 
       // 空き容量情報を取得
-      final diskSpace = await _getDiskSpace(mountPoint);
+      final diskSpace = await _getDiskSpace(
+        mountPoint,
+        disk.size,
+      );
 
       final device = DetectedDevice(
         mountPoint: mountPoint,
@@ -365,84 +369,30 @@ class DeviceDetector {
 
   /// マウントポイントの空き容量情報を取得
   ///
-  /// df コマンドを使用してディスクの使用状況を取得する。
+  /// ネイティブ実装経由で空き容量を取得し、総容量から使用量を算出する。
   /// 返り値は (totalBytes, usedBytes, freeBytes) のタプル。
   /// 取得に失敗した場合は null を返す。
   Future<({int total, int used, int free})?> _getDiskSpace(
     String mountPoint,
+    int? totalSize,
   ) async {
     try {
-      if (Platform.isMacOS || Platform.isLinux) {
-        // df -k でキロバイト単位で出力
-        final result = await Process.run('df', ['-k', mountPoint]);
-        if (result.exitCode != 0) return null;
-
-        final lines = (result.stdout as String).split('\n');
-        if (lines.length < 2) return null;
-
-        // ヘッダー行をスキップして 2 行目をパース
-        // macOS の df -k 出力例:
-        // Filesystem 1024-blocks Used Available Capacity iused ifree %iused Mounted on
-        // /dev/disk4s1 62357504 33591296 28766208 54% 0 0 0% /Volumes/Untitled
-        final parts = lines[1].split(RegExp(r'\s+'));
-        if (parts.length < 4) return null;
-
-        final totalKb = int.tryParse(parts[1]);
-        final usedKb = int.tryParse(parts[2]);
-        final freeKb = int.tryParse(parts[3]);
-
-        if (totalKb == null || usedKb == null || freeKb == null) return null;
-
-        return (
-          total: totalKb * 1024,
-          used: usedKb * 1024,
-          free: freeKb * 1024,
-        );
-      } else if (Platform.isWindows) {
-        // Windows では fsutil を使用（wmic は廃止されたため）
-        // fsutil volume diskfree D:
-        // 出力例:
-        // Total # of bytes         : 64023257088
-        // Total # of free bytes    : 30123456789
-        // Total # of avail free bytes : 30123456789
-        final driveLetter = mountPoint.replaceAll(r'\', '');
-        final result = await Process.run('fsutil', [
-          'volume',
-          'diskfree',
-          driveLetter,
-        ]);
-        if (result.exitCode != 0) return null;
-
-        final output = result.stdout as String;
-        int? totalBytes;
-        int? freeBytes;
-
-        // 各行をパース
-        for (final line in output.split('\n')) {
-          // "Total # of bytes" の行から総容量を取得
-          if (line.contains('Total # of bytes') && !line.contains('free')) {
-            final match = RegExp(r':\s*(\d+)').firstMatch(line);
-            if (match != null) {
-              totalBytes = int.tryParse(match.group(1)!);
-            }
-          }
-          // "Total # of free bytes" の行から空き容量を取得
-          else if (line.contains('Total # of free bytes')) {
-            final match = RegExp(r':\s*(\d+)').firstMatch(line);
-            if (match != null) {
-              freeBytes = int.tryParse(match.group(1)!);
-            }
-          }
-        }
-
-        if (totalBytes == null || freeBytes == null) return null;
-
-        return (
-          total: totalBytes,
-          used: totalBytes - freeBytes,
-          free: freeBytes,
-        );
+      if (totalSize == null || totalSize <= 0) {
+        return null;
       }
+
+      final freeBytes = await FileTimeService.instance.getAvailableDiskSpace(
+        mountPoint,
+      );
+      if (freeBytes == null) {
+        return null;
+      }
+
+      return (
+        total: totalSize,
+        used: totalSize - freeBytes,
+        free: freeBytes,
+      );
     } catch (ex) {
       _log.debug(
         'Failed to get disk space for $mountPoint: $ex.',

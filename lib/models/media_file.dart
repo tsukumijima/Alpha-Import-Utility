@@ -22,7 +22,7 @@ enum MediaType {
   /// 本編動画（.MP4）- PRIVATE/M4ROOT/CLIP/ に格納
   Video,
 
-  /// プロキシ動画（.MP4）- PRIVATE/M4ROOT/SUB/ に格納
+  /// プロキシー動画（.MP4）- PRIVATE/M4ROOT/SUB/ に格納
   /// 編集用の低解像度版動画
   ProxyVideo,
 
@@ -70,7 +70,7 @@ extension MediaTypeExtension on MediaType {
     return this == MediaType.JPEGPhoto || this == MediaType.RAWPhoto || this == MediaType.HEIFPhoto;
   }
 
-  /// 動画かどうか（プロキシ含む）
+  /// 動画かどうか（プロキシー含む）
   bool get isVideo {
     return this == MediaType.Video || this == MediaType.ProxyVideo;
   }
@@ -87,7 +87,7 @@ extension MediaTypeExtension on MediaType {
       case MediaType.Video:
         return '動画';
       case MediaType.ProxyVideo:
-        return 'プロキシ動画';
+        return 'プロキシー動画';
       case MediaType.VideoMeta:
         return '動画メタデータ';
       case MediaType.Unknown:
@@ -119,15 +119,37 @@ class MediaFile {
   /// ファイルサイズ（バイト）
   final int fileSize;
 
-  /// EXIF またはメタデータから取得した撮影日時
+  /// EXIF またはメタデータから取得した撮影日時（カメラのローカル時刻）
   ///
   /// 取得できなかった場合は null
-  final DateTime? exifDateTime;
+  final DateTime? exifDateTimeLocal;
 
-  /// ファイルシステム上の更新日時
+  /// EXIF またはメタデータから取得した撮影日時（UTC ミリ秒）
   ///
-  /// EXIF が取得できない場合のフォールバックとして使用
-  final DateTime fileModifiedTime;
+  /// 取得できなかった場合は null
+  final int? exifDateTimeUtcMs;
+
+  /// EXIF にタイムゾーン情報が含まれていたか
+  final bool hasExifTimezone;
+
+  /// 取り込み元ファイルの作成日時（UTC ミリ秒）
+  final int sourceCreatedTimeUtcMs;
+
+  /// 取り込み元ファイルの更新日時（UTC ミリ秒）
+  final int sourceModifiedTimeUtcMs;
+
+  /// 絶対的な撮影開始日時（UTC ミリ秒）
+  ///
+  /// 取得順序に従って必ず決定される。
+  final int capturedStartTimeUtcMs;
+
+  /// 絶対的な撮影終了日時（UTC ミリ秒）
+  ///
+  /// 写真の場合は開始日時と同じになる。
+  final int capturedEndTimeUtcMs;
+
+  /// サブフォルダ命名に使用する撮影日時（カメラのローカル時刻）
+  final DateTime captureLocalDateTime;
 
   /// xxHash64 ハッシュ値（16 進数文字列）
   ///
@@ -140,6 +162,7 @@ class MediaFile {
   /// 相対パスと組み合わせて完全なパスを生成するために使用
   final String sdCardRoot;
 
+  /// MediaFile を生成する
   MediaFile({
     required this.relativePath,
     required this.fileName,
@@ -147,8 +170,14 @@ class MediaFile {
     required this.extension,
     required this.type,
     required this.fileSize,
-    required this.exifDateTime,
-    required this.fileModifiedTime,
+    required this.exifDateTimeLocal,
+    required this.exifDateTimeUtcMs,
+    required this.hasExifTimezone,
+    required this.sourceCreatedTimeUtcMs,
+    required this.sourceModifiedTimeUtcMs,
+    required this.capturedStartTimeUtcMs,
+    required this.capturedEndTimeUtcMs,
+    required this.captureLocalDateTime,
     required this.sdCardRoot,
     this.xxHash,
   });
@@ -156,16 +185,15 @@ class MediaFile {
   /// 完全なファイルパスを取得
   String get absolutePath => p.join(sdCardRoot, relativePath);
 
-  /// 取り込み時に使用する日時を取得
-  ///
-  /// EXIF 日時が有効な場合はそれを使用し、
-  /// 無効または取得できなかった場合はファイル更新日時を使用する。
-  /// EXIF 日時の有効性は _isValidExifDateTime で判定する。
-  DateTime get effectiveDateTime {
-    if (exifDateTime != null && _isValidExifDateTime(exifDateTime!)) {
-      return exifDateTime!;
-    }
-    return fileModifiedTime;
+  /// 取り込み時に使用する日時（カメラのローカル時刻）を取得
+  DateTime get effectiveDateTimeLocal => captureLocalDateTime;
+
+  /// 取り込み時に使用する日時（UTC）を取得
+  DateTime get effectiveDateTimeUtc {
+    return DateTime.fromMillisecondsSinceEpoch(
+      capturedStartTimeUtcMs,
+      isUtc: true,
+    );
   }
 
   /// EXIF 日時が有効かどうかを判定
@@ -180,7 +208,41 @@ class MediaFile {
   }
 
   /// EXIF 日時が有効かどうかを取得
-  bool get isExifDateTimeValid => exifDateTime != null && _isValidExifDateTime(exifDateTime!);
+  bool get isExifDateTimeValid => exifDateTimeLocal != null && _isValidExifDateTime(exifDateTimeLocal!);
+
+  /// 取り込み元ファイルの作成日時（UTC）を取得
+  DateTime get sourceCreatedTimeUtc {
+    return DateTime.fromMillisecondsSinceEpoch(
+      sourceCreatedTimeUtcMs,
+      isUtc: true,
+    );
+  }
+
+  /// 取り込み元ファイルの更新日時（UTC）を取得
+  DateTime get sourceModifiedTimeUtc {
+    return DateTime.fromMillisecondsSinceEpoch(
+      sourceModifiedTimeUtcMs,
+      isUtc: true,
+    );
+  }
+
+  /// 取り込み元ファイルの参照日時（UTC）
+  ///
+  /// 作成日時と更新日時のうち古い方を使用する。
+  DateTime get sourceReferenceTimeUtc {
+    final referenceMs = sourceCreatedTimeUtcMs <= sourceModifiedTimeUtcMs
+        ? sourceCreatedTimeUtcMs
+        : sourceModifiedTimeUtcMs;
+    return DateTime.fromMillisecondsSinceEpoch(referenceMs, isUtc: true);
+  }
+
+  /// 絶対的な撮影終了日時（UTC）を取得
+  DateTime get capturedEndTimeUtc {
+    return DateTime.fromMillisecondsSinceEpoch(
+      capturedEndTimeUtcMs,
+      isUtc: true,
+    );
+  }
 
   /// ファイルサイズを人間が読みやすい形式で取得
   String get formattedFileSize {

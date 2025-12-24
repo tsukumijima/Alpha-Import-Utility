@@ -16,6 +16,10 @@ import 'package:alpha_import_utility/utils/exif_utils.dart';
 import '../fixtures/test_helper.dart';
 
 void main() {
+  setUpAll(() {
+    setUpFileTimeServiceMocks();
+  });
+
   group('SonyFilesystemService', () {
     group('validate', () {
       test('正常な Sony SD カード構造を検証できる', () async {
@@ -456,7 +460,7 @@ void main() {
                   file,
                   cameraTimezone: 'Asia/Tokyo',
                 );
-                rawExifByBaseName[baseName] = exif.bestDateTime;
+                rawExifByBaseName[baseName] = exif.bestLocalDateTime;
                 continue;
               }
 
@@ -465,8 +469,8 @@ void main() {
                   file,
                   cameraTimezone: 'Asia/Tokyo',
                 );
-                if (exif.bestDateTime != null) {
-                  fallbackExifByBaseName[baseName] = exif.bestDateTime!;
+                if (exif.bestLocalDateTime != null) {
+                  fallbackExifByBaseName[baseName] = exif.bestLocalDateTime!;
                 }
               }
             }
@@ -490,7 +494,7 @@ void main() {
               final rawFile = scanResult.mediaFiles.firstWhere(
                 (file) => file.type == MediaType.RAWPhoto && file.baseName == baseName,
               );
-              expect(rawFile.exifDateTime, equals(fallbackExifByBaseName[baseName]));
+              expect(rawFile.exifDateTimeLocal, equals(fallbackExifByBaseName[baseName]));
             }
           } finally {
             await cleanup();

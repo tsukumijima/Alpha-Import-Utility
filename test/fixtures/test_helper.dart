@@ -4,8 +4,8 @@
 library;
 
 import 'dart:io';
-import 'dart:typed_data';
-
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 /// テスト用の一時ディレクトリを作成
@@ -21,6 +21,58 @@ Future<(String, Future<void> Function())> createTempDirectory() async {
       }
     },
   );
+}
+
+/// ファイル日時操作の MethodChannel をモックする
+///
+/// Windows/macOS のネイティブ実装が無いテスト環境でも
+/// FileTimeService を安全に利用できるようにする。
+void setUpFileTimeServiceMocks() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  const channel = MethodChannel('alpha_import_utility/file_time');
+  final creationTimes = <String, int>{};
+
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+    final args = call.arguments as Map<dynamic, dynamic>? ?? {};
+    final path = args['path'] as String?;
+    if (path == null || path.isEmpty) {
+      throw PlatformException(code: 'INVALID_ARGS', message: 'Missing path.');
+    }
+
+    switch (call.method) {
+      case 'setFileTimes':
+        final creationMs = args['creationTimeUtcMs'] as int?;
+        final modifiedMs = args['modifiedTimeUtcMs'] as int?;
+        if (creationMs == null || modifiedMs == null) {
+          throw PlatformException(code: 'INVALID_ARGS', message: 'Missing times.');
+        }
+        creationTimes[path] = creationMs;
+        final file = File(path);
+        if (await file.exists()) {
+          await file.setLastModified(
+            DateTime.fromMillisecondsSinceEpoch(modifiedMs, isUtc: true),
+          );
+        }
+        return null;
+      case 'getFileTimes':
+        final file = File(path);
+        final stat = await file.stat();
+        final creationMs = creationTimes[path] ?? stat.modified.toUtc().millisecondsSinceEpoch;
+        final modifiedMs = stat.modified.toUtc().millisecondsSinceEpoch;
+        return {
+          'creationTimeUtcMs': creationMs,
+          'modifiedTimeUtcMs': modifiedMs,
+        };
+      case 'getAvailableDiskSpace':
+        return 1024 * 1024 * 1024 * 1024;
+      default:
+        throw PlatformException(
+          code: 'NOT_IMPLEMENTED',
+          message: 'Method not implemented.',
+        );
+    }
+  });
 }
 
 /// モック Sony SD カード構造を作成
@@ -65,6 +117,65 @@ Future<void> createMockSdCardStructure(
   // モックファイルを作成
   for (final mockFile in mockFiles) {
     await mockFile.create(rootPath);
+  }
+}
+
+/// sample_media を SD カード構造にコピーする
+///
+/// [includeProxy] が true の場合は SUB にプロキシー動画も配置する。
+/// [copiesPerFile] を指定すると、同じファイルを別名で複製して配置する。
+Future<void> createSdCardFromSampleMedia(
+  String rootPath, {
+  bool includeProxy = true,
+  int copiesPerFile = 1,
+}) async {
+  final sampleDir = Directory(p.join('test', 'fixtures', 'sample_media'));
+  if (!sampleDir.existsSync()) {
+    return;
+  }
+
+  await createMockSdCardStructure(
+    rootPath,
+    createSub: includeProxy,
+  );
+
+  final dcimPath = p.join(rootPath, 'DCIM', '100MSDCF');
+  final clipPath = p.join(rootPath, 'PRIVATE', 'M4ROOT', 'CLIP');
+  final subPath = p.join(rootPath, 'PRIVATE', 'M4ROOT', 'SUB');
+
+  final files = sampleDir.listSync().whereType<File>().toList();
+  for (final file in files) {
+    final fileName = p.basename(file.path);
+    final extension = p.extension(file.path).toLowerCase();
+
+    String? targetDir;
+    if (extension == '.jpg' ||
+        extension == '.jpeg' ||
+        extension == '.arw' ||
+        extension == '.hif' ||
+        extension == '.heif') {
+      targetDir = dcimPath;
+    } else if (extension == '.xml') {
+      targetDir = clipPath;
+    } else if (extension == '.mp4') {
+      if (fileName.toUpperCase().contains('S03') && includeProxy) {
+        targetDir = subPath;
+      } else {
+        targetDir = clipPath;
+      }
+    }
+
+    if (targetDir == null) {
+      continue;
+    }
+
+    await Directory(targetDir).create(recursive: true);
+    for (var copyIndex = 0; copyIndex < copiesPerFile; copyIndex++) {
+      final copyName = copyIndex == 0
+          ? fileName
+          : '${p.basenameWithoutExtension(fileName)}_copy$copyIndex${p.extension(fileName)}';
+      await file.copy(p.join(targetDir, copyName));
+    }
   }
 }
 
