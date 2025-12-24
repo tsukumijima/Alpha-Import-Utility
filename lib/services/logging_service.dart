@@ -68,7 +68,7 @@ class LoggingService {
 
       // 起動ログを出力
       info('Application started.');
-      info('Log file: ${_logFile!.path}');
+      info('Log file: ${_logFile!.path}.');
       info('Platform: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}.');
     } catch (ex) {
       // ログ初期化に失敗してもアプリは続行する（コンソール出力のみ）

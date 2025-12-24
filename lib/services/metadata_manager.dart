@@ -162,7 +162,7 @@ class MetadataManager {
       tag: 'MetadataManager',
     );
     final metadata = await load();
-    final updatedMetadata = metadata.addRecord(record);
+    final updatedMetadata = metadata.upsertRecord(record);
     await save(updatedMetadata);
   }
 
@@ -175,7 +175,7 @@ class MetadataManager {
       tag: 'MetadataManager',
     );
     final metadata = await load();
-    final updatedMetadata = metadata.addRecords(records);
+    final updatedMetadata = metadata.upsertRecords(records);
     await save(updatedMetadata);
   }
 

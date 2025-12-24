@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../models/media_file.dart';
+import '../models/import_result.dart';
 import '../models/settings.dart';
 import '../utils/exif_utils.dart';
 import '../utils/file_utils.dart';
@@ -74,6 +75,20 @@ class SonyFilesystemValidation {
       errorMessage: errorMessage,
     );
   }
+}
+
+/// Sony SD カードのスキャン結果
+class SonyFilesystemScanResult {
+  /// 取り込み対象のメディアファイル一覧
+  final List<MediaFile> mediaFiles;
+
+  /// スキャン時に検出した警告一覧
+  final List<ImportWarning> warnings;
+
+  SonyFilesystemScanResult({
+    required this.mediaFiles,
+    required this.warnings,
+  });
 }
 
 /// Sony α SD カードのファイルシステム操作を行うサービス
@@ -273,17 +288,18 @@ class SonyFilesystemService {
   /// 3. PRIVATE/M4ROOT/SUB/（設定で有効な場合のみ）
   ///
   /// 各フォルダ内はファイル名でソートされる。
-  Future<List<MediaFile>> scanMediaFiles(ImportSettings settings) async {
+  Future<SonyFilesystemScanResult> scanMediaFiles(ImportSettings settings) async {
     final validation = await validate();
     if (!validation.isValid) {
       throw Exception('Invalid Sony SD card structure: ${validation.errorMessage}');
     }
 
     final mediaFiles = <MediaFile>[];
+    final warnings = <ImportWarning>[];
 
     // 1. DCIM フォルダ内の静止画をスキャン
     for (final dcfPath in validation.dcfFolders) {
-      final photos = await _scanPhotosInFolder(dcfPath);
+      final photos = await _scanPhotosInFolder(dcfPath, warnings);
       mediaFiles.addAll(photos);
     }
 
@@ -294,6 +310,7 @@ class SonyFilesystemService {
         clipPath,
         isProxyFolder: false,
         includeXml: settings.isImportVideoXML,
+        warnings: warnings,
       );
       mediaFiles.addAll(videos);
     }
@@ -306,12 +323,16 @@ class SonyFilesystemService {
           subPath,
           isProxyFolder: true,
           includeXml: false, // SUB フォルダの XML は取り込まない
+          warnings: warnings,
         );
         mediaFiles.addAll(proxyVideos);
       }
     }
 
-    return mediaFiles;
+    return SonyFilesystemScanResult(
+      mediaFiles: mediaFiles,
+      warnings: warnings,
+    );
   }
 
   /// CLIP フォルダのパスを取得
@@ -337,7 +358,10 @@ class SonyFilesystemService {
   }
 
   /// フォルダ内の静止画をスキャン
-  Future<List<MediaFile>> _scanPhotosInFolder(String folderPath) async {
+  Future<List<MediaFile>> _scanPhotosInFolder(
+    String folderPath,
+    List<ImportWarning> warnings,
+  ) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
 
@@ -360,6 +384,8 @@ class SonyFilesystemService {
             if (mediaFile != null) {
               files.add(mediaFile);
             }
+          } else if (ext.isNotEmpty) {
+            await _addUnknownExtensionWarning(entity, warnings);
           }
         }
       }
@@ -375,6 +401,7 @@ class SonyFilesystemService {
     String folderPath, {
     required bool isProxyFolder,
     required bool includeXml,
+    required List<ImportWarning> warnings,
   }) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
@@ -407,6 +434,8 @@ class SonyFilesystemService {
             if (mediaFile != null) {
               files.add(mediaFile);
             }
+          } else if (!_metaExtensions.contains(ext) && ext.isNotEmpty) {
+            await _addUnknownExtensionWarning(entity, warnings);
           }
         }
       }
@@ -415,6 +444,42 @@ class SonyFilesystemService {
     }
 
     return files;
+  }
+
+  /// 未知の拡張子を警告として追加
+  Future<void> _addUnknownExtensionWarning(
+    File file,
+    List<ImportWarning> warnings,
+  ) async {
+    try {
+      final fileName = p.basename(file.path);
+      final extension = getExtension(fileName).toLowerCase();
+      final baseName = getBaseName(fileName);
+      final stat = await file.stat();
+      final relativePath = _getRelativePath(file.path);
+
+      final mediaFile = MediaFile(
+        relativePath: relativePath,
+        fileName: fileName,
+        baseName: baseName,
+        extension: extension,
+        type: MediaType.Unknown,
+        fileSize: stat.size,
+        exifDateTime: null,
+        fileModifiedTime: stat.modified,
+        sdCardRoot: rootPath,
+      );
+
+      warnings.add(
+        ImportWarning(
+          type: ImportWarningType.UnknownExtensionFound,
+          file: mediaFile,
+          message: 'Unknown file extension: $extension.',
+        ),
+      );
+    } catch (_) {
+      // 未知ファイルの警告追加に失敗した場合は無視する
+    }
   }
 
   /// MediaFile オブジェクトを作成

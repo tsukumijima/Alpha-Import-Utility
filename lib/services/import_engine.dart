@@ -77,12 +77,12 @@ class ImportEngine {
   /// 5. 各ファイルの取り込み処理
   /// 6. 結果の返却
   Future<ImportResult> execute() async {
-    _log.logImportStarted(sdCardRoot, 0);
     final stopwatch = Stopwatch()..start();
     final warnings = <ImportWarning>[];
     final importedFiles = <ImportedFileRecord>[];
     int successCount = 0;
     int skippedCount = 0;
+    int errorCount = 0;
 
     try {
       // Phase 1: SD カード構造の検証
@@ -109,8 +109,12 @@ class ImportEngine {
 
       // Phase 3: 対象ファイルのスキャン
       _log.debug('Phase 3: Scanning media files.', tag: 'ImportEngine');
-      final mediaFiles = await _sonyFs.scanMediaFiles(settings);
+      final scanResult = await _sonyFs.scanMediaFiles(settings);
+      final mediaFiles = scanResult.mediaFiles;
+      warnings.addAll(scanResult.warnings);
       _log.info('Found ${mediaFiles.length} media files to import.', tag: 'ImportEngine');
+
+      _log.logImportStarted(sdCardRoot, mediaFiles.length);
 
       if (mediaFiles.isEmpty) {
         _log.info('No files to import.', tag: 'ImportEngine');
@@ -147,15 +151,14 @@ class ImportEngine {
 
       // Phase 5: 各ファイルの取り込み処理
       _log.debug('Phase 5: Starting file import.', tag: 'ImportEngine');
-      _notifyProgress(
-        ImportProgress(
-          processedCount: 0,
-          totalCount: mediaFiles.length,
-          phase: 'Importing...',
-        ),
+      var progress = ImportProgress(
+        processedCount: 0,
+        totalCount: mediaFiles.length,
+        phase: 'Importing...',
       );
+      _notifyProgress(progress);
 
-      for (var index = 0; index < mediaFiles.length; index++) {
+      for (final mediaFile in mediaFiles) {
         // キャンセルチェック
         if (_isCancelled) {
           return ImportResult.cancelled(
@@ -167,20 +170,19 @@ class ImportEngine {
           );
         }
 
-        final mediaFile = mediaFiles[index];
-
         // 進捗通知
-        _notifyProgress(
-          ImportProgress(
-            currentFile: mediaFile,
-            processedCount: index,
-            totalCount: mediaFiles.length,
-            phase: 'Importing...',
-          ).startFile(mediaFile),
-        );
+        progress = progress.startFile(mediaFile);
+        _notifyProgress(progress);
 
         // 取り込み判定と処理
-        final result = await _processFile(mediaFile, warnings);
+        final result = await _processFile(
+          mediaFile,
+          warnings,
+          onCopyProgress: (bytesCopied) {
+            progress = progress.updateFileProgress(bytesCopied);
+            _notifyProgress(progress);
+          },
+        );
 
         switch (result) {
           case _FileProcessResult.imported:
@@ -195,7 +197,23 @@ class ImportEngine {
                 destinationPath: _lastDestinationPath ?? '',
                 appVersion: _appVersion,
               );
-              await _metadataManager.addRecord(record);
+              try {
+                await _metadataManager.addRecord(record);
+              } catch (ex, stackTrace) {
+                warnings.add(
+                  ImportWarning(
+                    type: ImportWarningType.MetadataUpdateSkipped,
+                    file: mediaFile,
+                    message: 'Failed to update metadata file, import state may be incomplete.',
+                  ),
+                );
+                _log.error(
+                  'Failed to update metadata file.',
+                  tag: 'ImportEngine',
+                  error: ex,
+                  stackTrace: stackTrace,
+                );
+              }
               importedFiles.add(record);
             }
             break;
@@ -203,29 +221,24 @@ class ImportEngine {
             skippedCount++;
             break;
           case _FileProcessResult.error:
-            // エラーは警告として記録済み
+            errorCount++;
             break;
         }
 
         // ファイル完了の進捗通知
-        _notifyProgress(
-          ImportProgress(
-            processedCount: index + 1,
-            totalCount: mediaFiles.length,
-            phase: 'Importing...',
-          ),
-        );
+        progress = progress.completeFile();
+        _notifyProgress(progress);
       }
 
       stopwatch.stop();
 
-      _log.logImportCompleted(successCount, skippedCount, warnings.length, stopwatch.elapsed);
+      _log.logImportCompleted(successCount, skippedCount, errorCount, stopwatch.elapsed);
 
       return ImportResult(
         successCount: successCount,
         skippedCount: skippedCount,
         warningCount: warnings.length,
-        errorCount: 0,
+        errorCount: errorCount,
         warnings: warnings,
         importedFiles: importedFiles,
         duration: stopwatch.elapsed,
@@ -258,8 +271,28 @@ class ImportEngine {
   Future<_FileProcessResult> _processFile(
     MediaFile file,
     List<ImportWarning> warnings,
+    {void Function(int bytesCopied)? onCopyProgress,}
   ) async {
     try {
+      // EXIF/メタデータの読み取り失敗を警告として記録
+      if (file.type.isPhoto && !file.isExifDateTimeValid) {
+        warnings.add(
+          ImportWarning(
+            type: ImportWarningType.ExifReadFailed,
+            file: file,
+            message: 'Failed to read EXIF datetime, using file modified time.',
+          ),
+        );
+      } else if (file.type == MediaType.Video && file.exifDateTime == null) {
+        warnings.add(
+          ImportWarning(
+            type: ImportWarningType.ExifReadFailed,
+            file: file,
+            message: 'Failed to read video XML datetime, using file modified time.',
+          ),
+        );
+      }
+
       // 書き込み中ファイルのチェック
       final sourceFile = File(file.absolutePath);
       if (await isFileBeingWritten(sourceFile)) {
@@ -267,7 +300,7 @@ class ImportEngine {
           ImportWarning(
             type: ImportWarningType.FileInUseSkipped,
             file: file,
-            message: 'File appears to be in use, skipping',
+            message: 'File appears to be in use, skipping.',
           ),
         );
         return _FileProcessResult.skipped;
@@ -311,7 +344,7 @@ class ImportEngine {
       }
 
       // ファイルをコピー
-      await _copyFileWithHash(file, warnings);
+      await _copyFileWithHash(file, warnings, onCopyProgress: onCopyProgress);
 
       return _FileProcessResult.imported;
     } catch (ex) {
@@ -319,7 +352,7 @@ class ImportEngine {
         ImportWarning(
           type: ImportWarningType.HashVerificationFailed,
           file: file,
-          message: 'Failed to process file: $ex',
+          message: 'Failed to process file: $ex.',
         ),
       );
       return _FileProcessResult.error;
@@ -332,10 +365,29 @@ class ImportEngine {
     return p.join(settings.destinationFolder, subfolderPath);
   }
 
+  /// 日時復元に使用するターゲット日時を解決
+  ///
+  /// EXIF 日時が有効かつファイル日時との差が許容範囲外の場合のみ EXIF を使用する。
+  /// それ以外はファイルシステムの更新日時を優先する。
+  DateTime _resolveRestoreDateTime(MediaFile file) {
+    if (!file.isExifDateTimeValid) {
+      return file.fileModifiedTime;
+    }
+
+    final exifDateTime = file.exifDateTime!;
+    final diffSeconds = exifDateTime.difference(file.fileModifiedTime).inSeconds.abs();
+    if (diffSeconds <= settings.dateRestoreToleranceSeconds) {
+      return file.fileModifiedTime;
+    }
+
+    return exifDateTime;
+  }
+
   /// ファイルをコピーしてハッシュを計算
   Future<void> _copyFileWithHash(
     MediaFile file,
     List<ImportWarning> warnings,
+    {void Function(int bytesCopied)? onCopyProgress,}
   ) async {
     final sourceFile = File(file.absolutePath);
     final destFolder = _getDestinationFolder(file);
@@ -364,7 +416,7 @@ class ImportEngine {
         ImportWarning(
           type: ImportWarningType.DuplicateRenamed,
           file: file,
-          message: 'Renamed to $destFileName due to existing file',
+          message: 'Renamed to $destFileName due to existing file.',
         ),
       );
     }
@@ -380,7 +432,9 @@ class ImportEngine {
           source: sourceFile,
           destination: destFile,
           onProgress: (bytesCopied) {
-            // ファイルコピーの進捗（現在は使用していないが、将来的に使用可能）
+            if (onCopyProgress != null) {
+              onCopyProgress(bytesCopied);
+            }
           },
         );
 
@@ -401,7 +455,7 @@ class ImportEngine {
               ImportWarning(
                 type: ImportWarningType.HashVerificationFailed,
                 file: file,
-                message: 'Hash verification failed after $attempt attempts',
+                message: 'Hash verification failed after $attempt attempts.',
               ),
             );
             await destFile.delete();
@@ -412,13 +466,14 @@ class ImportEngine {
         // 日時復元
         if (settings.isRestoreDateTimeFromExif) {
           try {
-            await restoreFileDateTime(destFile, file.effectiveDateTime);
+            final targetDateTime = _resolveRestoreDateTime(file);
+            await restoreFileDateTime(destFile, targetDateTime);
           } catch (_) {
             warnings.add(
               ImportWarning(
                 type: ImportWarningType.DateRestoreFailed,
                 file: file,
-                message: 'Failed to restore file datetime',
+                message: 'Failed to restore file datetime.',
               ),
             );
           }
@@ -432,6 +487,13 @@ class ImportEngine {
         _log.logFileCopied(file.relativePath, destPath);
         return;
       } catch (ex) {
+        if (await destFile.exists()) {
+          try {
+            await destFile.delete();
+          } catch (_) {
+            // コピー失敗時の残骸削除に失敗しても再試行を優先する
+          }
+        }
         if (attempt >= _maxCopyRetries) {
           rethrow;
         }

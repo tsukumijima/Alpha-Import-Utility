@@ -3,6 +3,8 @@
 /// Sony α カメラの SD カードから取り込むメディアファイルの情報を保持する。
 library;
 
+import 'package:path/path.dart' as p;
+
 /// メディアファイルの種類
 ///
 /// Sony α カメラで撮影・生成されるファイルの種類を表す。
@@ -27,6 +29,9 @@ enum MediaType {
   /// 動画メタデータ（.XML）- NonRealTimeMeta 形式
   /// 撮影日時やカメラ情報などを含む
   VideoMeta,
+
+  /// 未知のファイル（取り込み対象外）
+  Unknown,
 }
 
 /// MediaType の拡張メソッド
@@ -85,6 +90,8 @@ extension MediaTypeExtension on MediaType {
         return 'プロキシ動画';
       case MediaType.VideoMeta:
         return '動画メタデータ';
+      case MediaType.Unknown:
+        return '未知のファイル';
     }
   }
 }
@@ -147,7 +154,7 @@ class MediaFile {
   });
 
   /// 完全なファイルパスを取得
-  String get absolutePath => '$sdCardRoot/$relativePath';
+  String get absolutePath => p.join(sdCardRoot, relativePath);
 
   /// 取り込み時に使用する日時を取得
   ///
@@ -171,6 +178,9 @@ class MediaFile {
 
     return dateTime.isAfter(minValidDate) && dateTime.isBefore(maxValidDate);
   }
+
+  /// EXIF 日時が有効かどうかを取得
+  bool get isExifDateTimeValid => exifDateTime != null && _isValidExifDateTime(exifDateTime!);
 
   /// ファイルサイズを人間が読みやすい形式で取得
   String get formattedFileSize {

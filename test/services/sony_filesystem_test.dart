@@ -147,7 +147,8 @@ void main() {
           final service = SonyFilesystemService(tempDir);
           final settings = ImportSettings.defaults();
 
-          final files = await service.scanMediaFiles(settings);
+          final scanResult = await service.scanMediaFiles(settings);
+          final files = scanResult.mediaFiles;
 
           expect(files.length, equals(2));
           expect(files[0].type, equals(MediaType.JPEGPhoto));
@@ -172,7 +173,8 @@ void main() {
           final service = SonyFilesystemService(tempDir);
           final settings = ImportSettings.defaults();
 
-          final files = await service.scanMediaFiles(settings);
+          final scanResult = await service.scanMediaFiles(settings);
+          final files = scanResult.mediaFiles;
 
           expect(files.length, equals(2));
           expect(files[0].type, equals(MediaType.RAWPhoto));
@@ -196,7 +198,8 @@ void main() {
           final service = SonyFilesystemService(tempDir);
           final settings = ImportSettings.defaults();
 
-          final files = await service.scanMediaFiles(settings);
+          final scanResult = await service.scanMediaFiles(settings);
+          final files = scanResult.mediaFiles;
 
           expect(files.length, equals(2));
           expect(files[0].type, equals(MediaType.Video));
@@ -225,14 +228,16 @@ void main() {
             destinationFolder: '/tmp',
             isImportProxyVideos: true,
           );
-          final filesWithProxy = await service.scanMediaFiles(settingsWithProxy);
+          final scanResultWithProxy = await service.scanMediaFiles(settingsWithProxy);
+          final filesWithProxy = scanResultWithProxy.mediaFiles;
 
           // プロキシ動画を取り込まない設定
           final settingsWithoutProxy = ImportSettings(
             destinationFolder: '/tmp',
             isImportProxyVideos: false,
           );
-          final filesWithoutProxy = await service.scanMediaFiles(settingsWithoutProxy);
+          final scanResultWithoutProxy = await service.scanMediaFiles(settingsWithoutProxy);
+          final filesWithoutProxy = scanResultWithoutProxy.mediaFiles;
 
           expect(filesWithProxy.length, equals(2));
           expect(filesWithoutProxy.length, equals(1));
@@ -263,14 +268,16 @@ void main() {
             destinationFolder: '/tmp',
             isImportVideoXML: true,
           );
-          final filesWithXml = await service.scanMediaFiles(settingsWithXml);
+          final scanResultWithXml = await service.scanMediaFiles(settingsWithXml);
+          final filesWithXml = scanResultWithXml.mediaFiles;
 
           // XML を取り込まない設定
           final settingsWithoutXml = ImportSettings(
             destinationFolder: '/tmp',
             isImportVideoXML: false,
           );
-          final filesWithoutXml = await service.scanMediaFiles(settingsWithoutXml);
+          final scanResultWithoutXml = await service.scanMediaFiles(settingsWithoutXml);
+          final filesWithoutXml = scanResultWithoutXml.mediaFiles;
 
           expect(filesWithXml.length, equals(2));
           expect(filesWithoutXml.length, equals(1));
@@ -299,7 +306,8 @@ void main() {
           final service = SonyFilesystemService(tempDir);
           final settings = ImportSettings.defaults();
 
-          final files = await service.scanMediaFiles(settings);
+          final scanResult = await service.scanMediaFiles(settings);
+          final files = scanResult.mediaFiles;
 
           // ファイル名順にソートされていること
           expect(files[0].fileName, equals('DSC00001.JPG'));
@@ -324,7 +332,8 @@ void main() {
           final service = SonyFilesystemService(tempDir);
           final settings = ImportSettings.defaults();
 
-          final files = await service.scanMediaFiles(settings);
+          final scanResult = await service.scanMediaFiles(settings);
+          final files = scanResult.mediaFiles;
 
           expect(files.length, equals(2));
           // 写真が先、動画が後
@@ -357,7 +366,8 @@ void main() {
           final service = SonyFilesystemService(tempDir);
           final settings = ImportSettings.defaults();
 
-          final files = await service.scanMediaFiles(settings);
+          final scanResult = await service.scanMediaFiles(settings);
+          final files = scanResult.mediaFiles;
 
           // 有効なファイルのみ
           expect(files.length, equals(1));
@@ -381,7 +391,8 @@ void main() {
           final service = SonyFilesystemService(tempDir);
           final settings = ImportSettings.defaults();
 
-          final files = await service.scanMediaFiles(settings);
+          final scanResult = await service.scanMediaFiles(settings);
+          final files = scanResult.mediaFiles;
 
           expect(files[0].relativePath, equals('DCIM/100MSDCF/DSC00001.JPG'));
           expect(files[1].relativePath, equals('PRIVATE/M4ROOT/CLIP/C0001.MP4'));

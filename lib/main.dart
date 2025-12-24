@@ -29,7 +29,7 @@ void main() async {
   // ウィンドウ設定を読み込んで適用
   final windowSettings = await SettingsService.instance.loadWindowSettings();
   LoggingService.instance.debug(
-    'Window settings loaded: ${windowSettings.width}x${windowSettings.height}',
+    'Window settings loaded: ${windowSettings.width}x${windowSettings.height}.',
     tag: 'Main',
   );
 

@@ -198,12 +198,54 @@ class ImportMetadata {
     );
   }
 
+  /// 既存レコードを置き換えるか、新規に追加したメタデータを返す
+  ///
+  /// 同じ [sourcePath] を持つレコードが存在する場合は置換する。
+  ImportMetadata upsertRecord(ImportedFileRecord record) {
+    final updatedFiles = [...files];
+    final index = updatedFiles.indexWhere((existing) => existing.sourcePath == record.sourcePath);
+    if (index >= 0) {
+      updatedFiles[index] = record;
+    } else {
+      updatedFiles.add(record);
+    }
+
+    return ImportMetadata(
+      version: version,
+      lastUpdated: DateTime.now().toUtc(),
+      files: updatedFiles,
+    );
+  }
+
   /// 複数のレコードを追加したメタデータを返す
   ImportMetadata addRecords(List<ImportedFileRecord> newRecords) {
     return ImportMetadata(
       version: version,
       lastUpdated: DateTime.now().toUtc(),
       files: [...files, ...newRecords],
+    );
+  }
+
+  /// 複数のレコードを置換または追加したメタデータを返す
+  ImportMetadata upsertRecords(List<ImportedFileRecord> newRecords) {
+    if (newRecords.isEmpty) {
+      return this;
+    }
+
+    final updatedFiles = [...files];
+    for (final record in newRecords) {
+      final index = updatedFiles.indexWhere((existing) => existing.sourcePath == record.sourcePath);
+      if (index >= 0) {
+        updatedFiles[index] = record;
+      } else {
+        updatedFiles.add(record);
+      }
+    }
+
+    return ImportMetadata(
+      version: version,
+      lastUpdated: DateTime.now().toUtc(),
+      files: updatedFiles,
     );
   }
 
