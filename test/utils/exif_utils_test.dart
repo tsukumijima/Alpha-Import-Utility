@@ -66,7 +66,10 @@ void main() {
         final testFile = File(p.join(tempDir, 'test.txt'));
         await testFile.writeAsString('Hello, World!');
 
-        final exif = await readExifDateTime(testFile);
+        final exif = await readExifDateTime(
+          testFile,
+          cameraTimezone: 'Asia/Tokyo',
+        );
 
         expect(exif.hasAnyDateTime, isFalse);
       } finally {
@@ -77,7 +80,10 @@ void main() {
     test('存在しないファイルでは空の ExifDateTime を返す', () async {
       final testFile = File('/non/existent/file.jpg');
 
-      final exif = await readExifDateTime(testFile);
+      final exif = await readExifDateTime(
+        testFile,
+        cameraTimezone: 'Asia/Tokyo',
+      );
 
       expect(exif.hasAnyDateTime, isFalse);
     });
@@ -89,13 +95,58 @@ void main() {
         final testFile = File(p.join(tempDir, 'empty.jpg'));
         await testFile.writeAsBytes([]);
 
-        final exif = await readExifDateTime(testFile);
+        final exif = await readExifDateTime(
+          testFile,
+          cameraTimezone: 'Asia/Tokyo',
+        );
 
         expect(exif.hasAnyDateTime, isFalse);
       } finally {
         await cleanup();
       }
     });
+
+    test('sample_media の EXIF はタイムゾーンを優先して解釈する', () async {
+      final sampleDir = Directory(p.join('test', 'fixtures', 'sample_media'));
+      if (!sampleDir.existsSync()) {
+        return;
+      }
+
+      final files = sampleDir
+          .listSync()
+          .whereType<File>()
+          .where(
+            (file) => [
+              '.jpg',
+              '.jpeg',
+              '.arw',
+              '.hif',
+              '.heif',
+            ].contains(p.extension(file.path).toLowerCase()),
+          )
+          .toList();
+
+      if (files.isEmpty) {
+        return;
+      }
+
+      for (final file in files) {
+        final exifWithUtc = await readExifDateTime(
+          file,
+          cameraTimezone: 'UTC',
+        );
+        final exifWithTokyo = await readExifDateTime(
+          file,
+          cameraTimezone: 'Asia/Tokyo',
+        );
+
+        expect(exifWithUtc.bestDateTime, isNotNull);
+        expect(exifWithTokyo.bestDateTime, isNotNull);
+
+        final diffSeconds = exifWithUtc.bestDateTime!.difference(exifWithTokyo.bestDateTime!).inSeconds.abs();
+        expect(diffSeconds, lessThan(1));
+      }
+    }, skip: !Directory(p.join('test', 'fixtures', 'sample_media')).existsSync());
   });
 
   group('readVideoXmlDateTime', () {
@@ -111,7 +162,10 @@ void main() {
 </NonRealTimeMeta>
 ''');
 
-        final dateTime = await readVideoXmlDateTime(xmlFile);
+        final dateTime = await readVideoXmlDateTime(
+          xmlFile,
+          cameraTimezone: 'Asia/Tokyo',
+        );
 
         expect(dateTime, isNotNull);
         // タイムゾーン変換後の UTC 時刻を確認
@@ -133,7 +187,10 @@ void main() {
 </NonRealTimeMeta>
 ''');
 
-        final dateTime = await readVideoXmlDateTime(xmlFile);
+        final dateTime = await readVideoXmlDateTime(
+          xmlFile,
+          cameraTimezone: 'Asia/Tokyo',
+        );
 
         expect(dateTime, isNull);
       } finally {
@@ -148,7 +205,10 @@ void main() {
         final xmlFile = File(p.join(tempDir, 'C0001M01.XML'));
         await xmlFile.writeAsString('not valid xml');
 
-        final dateTime = await readVideoXmlDateTime(xmlFile);
+        final dateTime = await readVideoXmlDateTime(
+          xmlFile,
+          cameraTimezone: 'Asia/Tokyo',
+        );
 
         expect(dateTime, isNull);
       } finally {
@@ -168,7 +228,10 @@ void main() {
 </NonRealTimeMeta>
 ''');
 
-        final dateTime = await readVideoXmlDateTime(xmlFile);
+        final dateTime = await readVideoXmlDateTime(
+          xmlFile,
+          cameraTimezone: 'Asia/Tokyo',
+        );
 
         expect(dateTime, isNull);
       } finally {
@@ -179,7 +242,10 @@ void main() {
     test('存在しないファイルでは null を返す', () async {
       final xmlFile = File('/non/existent/C0001M01.XML');
 
-      final dateTime = await readVideoXmlDateTime(xmlFile);
+      final dateTime = await readVideoXmlDateTime(
+        xmlFile,
+        cameraTimezone: 'Asia/Tokyo',
+      );
 
       expect(dateTime, isNull);
     });
@@ -196,7 +262,10 @@ void main() {
 </NonRealTimeMeta>
 ''');
 
-        final dateTime = await readVideoXmlDateTime(xmlFile);
+        final dateTime = await readVideoXmlDateTime(
+          xmlFile,
+          cameraTimezone: 'Asia/Tokyo',
+        );
 
         expect(dateTime, isNotNull);
         expect(dateTime!.toUtc(), equals(DateTime.utc(2025, 12, 24, 15, 30)));
@@ -312,7 +381,10 @@ void main() {
 </NonRealTimeMeta>
 ''');
 
-        final dateTime = await readVideoDateTime(videoFile);
+        final dateTime = await readVideoDateTime(
+          videoFile,
+          cameraTimezone: 'Asia/Tokyo',
+        );
 
         expect(dateTime, isNotNull);
       } finally {
@@ -330,7 +402,10 @@ void main() {
         final videoFile = File(p.join(clipDir.path, 'C0001.MP4'));
         await videoFile.writeAsBytes([]);
 
-        final dateTime = await readVideoDateTime(videoFile);
+        final dateTime = await readVideoDateTime(
+          videoFile,
+          cameraTimezone: 'Asia/Tokyo',
+        );
 
         expect(dateTime, isNull);
       } finally {

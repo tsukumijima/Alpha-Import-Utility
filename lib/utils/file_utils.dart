@@ -65,22 +65,113 @@ Future<String> generateUniqueFileName(
 /// [file] の作成日時と更新日時を [dateTime] に設定する。
 /// アクセス日時は変更しない。
 ///
-/// プラットフォームによっては作成日時の変更がサポートされない場合がある。
-/// その場合は更新日時のみを変更する。
+/// 作成日時の復元ができない環境は仕様外のため例外を投げる。
+/// 取り込み処理側で fail-fast による中断を行う。
 Future<void> restoreFileDateTime(File file, DateTime dateTime) async {
   try {
     // Dart の File API では作成日時の変更は直接サポートされていないが、
     // setLastModified で更新日時は変更可能
     await file.setLastModified(dateTime);
 
-    // 作成日時の変更はプラットフォーム固有の実装が必要だが、
-    // macOS/Windows ともに標準 API では困難なため、
-    // 更新日時の復元のみを行う
+    await _restoreCreationTime(file, dateTime);
   } catch (ex) {
     // 日時復元失敗（読み取り専用ファイルなど）
     rethrow;
   }
 }
+
+/// 作成日時を復元する
+///
+/// Windows は PowerShell、macOS は SetFile コマンドを使用する。
+/// 非対応環境では例外を投げる。
+Future<void> _restoreCreationTime(File file, DateTime dateTime) async {
+  if (Platform.isWindows) {
+    final isoTime = dateTime.toIso8601String();
+    final escapedPath = _escapePowerShellString(file.path);
+    final script =
+        r"$item = Get-Item -LiteralPath '" +
+        escapedPath +
+        r"'; $item.CreationTime = Get-Date '" +
+        isoTime +
+        r"'; $item.LastWriteTime = Get-Date '" +
+        isoTime +
+        r"';";
+
+    final result = await Process.run(
+      'powershell',
+      ['-NoProfile', '-Command', script],
+    );
+    if (result.exitCode != 0) {
+      throw Exception('Failed to restore file creation time: ${result.stderr}');
+    }
+    return;
+  }
+
+  if (Platform.isMacOS) {
+    final setFileCommand = await _resolveSetFileCommand();
+    final formatted = _formatSetFileDateTime(dateTime.toLocal());
+    final result = await Process.run(
+      setFileCommand,
+      ['-d', formatted, file.path],
+    );
+    if (result.exitCode != 0) {
+      throw Exception('Failed to restore file creation time: ${result.stderr}');
+    }
+    return;
+  }
+
+  throw UnsupportedError(
+    'Creation time restore is not supported on this platform.',
+  );
+}
+
+/// PowerShell 用に文字列をエスケープする
+String _escapePowerShellString(String value) {
+  return value.replaceAll("'", "''");
+}
+
+/// SetFile 用に日時文字列を整形する
+///
+/// 形式: MM/DD/YYYY HH:MM:SS
+String _formatSetFileDateTime(DateTime dateTime) {
+  final month = dateTime.month.toString().padLeft(2, '0');
+  final day = dateTime.day.toString().padLeft(2, '0');
+  final year = dateTime.year.toString();
+  final hour = dateTime.hour.toString().padLeft(2, '0');
+  final minute = dateTime.minute.toString().padLeft(2, '0');
+  final second = dateTime.second.toString().padLeft(2, '0');
+  return '$month/$day/$year $hour:$minute:$second';
+}
+
+/// SetFile コマンドの存在を確認してコマンド名を返す
+///
+/// 利用不可の場合は例外を投げる。
+Future<String> _resolveSetFileCommand() async {
+  if (_cachedSetFileCommand != null) {
+    return _cachedSetFileCommand!;
+  }
+
+  final candidates = ['SetFile', 'setfile'];
+  for (final candidate in candidates) {
+    try {
+      final result = await Process.run('which', [candidate]);
+      final isCommandAvailable = result.exitCode == 0;
+      if (isCommandAvailable) {
+        _cachedSetFileCommand = candidate;
+        return candidate;
+      }
+    } catch (_) {
+      // which 実行失敗時は次の候補を試す
+    }
+  }
+
+  throw UnsupportedError(
+    'SetFile command is not available. '
+    'Install Xcode Command Line Tools.',
+  );
+}
+
+String? _cachedSetFileCommand;
 
 /// ファイルが書き込み中かどうかを判定する
 ///
@@ -185,26 +276,35 @@ Future<int?> getAvailableDiskSpace(String path) async {
         }
       }
     } else if (Platform.isWindows) {
-      // Windows では wmic コマンドを使用
+      // Windows では fsutil コマンドを使用（wmic は廃止）
       final driveLetter = path.substring(0, 2); // 例: 'C:'
-      final result = await Process.run('wmic', [
-        'logicaldisk',
-        'where',
-        'DeviceID="$driveLetter"',
-        'get',
-        'FreeSpace',
-        '/value',
+      final result = await Process.run('fsutil', [
+        'volume',
+        'diskfree',
+        driveLetter,
       ]);
       if (result.exitCode == 0) {
         final output = result.stdout as String;
-        final match = RegExp(r'FreeSpace=(\d+)').firstMatch(output);
-        if (match != null) {
-          return int.tryParse(match.group(1)!);
-        }
+        return _parseFsutilFreeBytes(output);
       }
     }
   } catch (_) {
     // コマンド実行失敗
+  }
+
+  return null;
+}
+
+/// fsutil の出力から空き容量（バイト）を取得する
+int? _parseFsutilFreeBytes(String output) {
+  final freeMatch = RegExp(r'Total # of free bytes\\s*:\\s*(\\d+)').firstMatch(output);
+  if (freeMatch != null) {
+    return int.tryParse(freeMatch.group(1)!);
+  }
+
+  final availableMatch = RegExp(r'Total # of avail free bytes\\s*:\\s*(\\d+)').firstMatch(output);
+  if (availableMatch != null) {
+    return int.tryParse(availableMatch.group(1)!);
   }
 
   return null;

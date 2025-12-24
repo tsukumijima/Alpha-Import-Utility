@@ -4,44 +4,15 @@
 /// タブで「基本設定」と「取り込みオプション」を切り替えられる。
 library;
 
-import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 
 import '../models/settings.dart';
 import '../services/logging_service.dart';
+import '../utils/timezone_utils.dart';
 
-/// サポートするタイムゾーンのリスト
-///
-/// IANA 形式のタイムゾーン名と UTC オフセット、表示名のペア。
-/// 主要なタイムゾーンのみを含む。
-const List<({String id, String offset, String name})> _supportedTimezones = [
-  (id: 'Pacific/Honolulu', offset: 'UTC-10:00', name: 'ホノルル'),
-  (id: 'America/Anchorage', offset: 'UTC-09:00', name: 'アンカレッジ'),
-  (id: 'America/Los_Angeles', offset: 'UTC-08:00', name: 'ロサンゼルス'),
-  (id: 'America/Denver', offset: 'UTC-07:00', name: 'デンバー'),
-  (id: 'America/Chicago', offset: 'UTC-06:00', name: 'シカゴ'),
-  (id: 'America/New_York', offset: 'UTC-05:00', name: 'ニューヨーク'),
-  (id: 'America/Sao_Paulo', offset: 'UTC-03:00', name: 'サンパウロ'),
-  (id: 'Atlantic/Azores', offset: 'UTC-01:00', name: 'アゾレス'),
-  (id: 'UTC', offset: 'UTC+00:00', name: 'UTC'),
-  (id: 'Europe/London', offset: 'UTC+00:00', name: 'ロンドン'),
-  (id: 'Europe/Paris', offset: 'UTC+01:00', name: 'パリ'),
-  (id: 'Europe/Berlin', offset: 'UTC+01:00', name: 'ベルリン'),
-  (id: 'Europe/Athens', offset: 'UTC+02:00', name: 'アテネ'),
-  (id: 'Europe/Moscow', offset: 'UTC+03:00', name: 'モスクワ'),
-  (id: 'Asia/Dubai', offset: 'UTC+04:00', name: 'ドバイ'),
-  (id: 'Asia/Karachi', offset: 'UTC+05:00', name: 'カラチ'),
-  (id: 'Asia/Kolkata', offset: 'UTC+05:30', name: 'コルカタ'),
-  (id: 'Asia/Dhaka', offset: 'UTC+06:00', name: 'ダッカ'),
-  (id: 'Asia/Bangkok', offset: 'UTC+07:00', name: 'バンコク'),
-  (id: 'Asia/Singapore', offset: 'UTC+08:00', name: 'シンガポール'),
-  (id: 'Asia/Hong_Kong', offset: 'UTC+08:00', name: '香港'),
-  (id: 'Asia/Shanghai', offset: 'UTC+08:00', name: '上海'),
-  (id: 'Asia/Tokyo', offset: 'UTC+09:00', name: '東京'),
-  (id: 'Asia/Seoul', offset: 'UTC+09:00', name: 'ソウル'),
-  (id: 'Australia/Sydney', offset: 'UTC+10:00', name: 'シドニー'),
-  (id: 'Pacific/Auckland', offset: 'UTC+12:00', name: 'オークランド'),
-];
+/// サポートするタイムゾーンのリストを参照するためのエイリアス
+const _supportedTimezones = supportedTimezones;
 
 /// 設定ダイアログウィジェット
 class SettingsDialog extends StatefulWidget {
@@ -254,8 +225,9 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
           _buildSectionTitle(theme, 'カメラタイムゾーン'),
           const SizedBox(height: 6),
           Text(
-            'カメラに設定されているタイムゾーンを指定します。\n'
-            'この情報はファイル日時の復元時に利用されます。\n'
+            'ファイル日時の復元時に利用する、カメラに設定されているタイムゾーンを指定します。\n'
+            'EXIF にタイムゾーン情報が含まれている場合は、その値を優先します。\n'
+            'EXIF にタイムゾーン情報がない場合のみ、この設定がフォールバックとして利用されます。\n'
             '日本国内で使用している場合は「東京」を選択してください。',
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
           ),

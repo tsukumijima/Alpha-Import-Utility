@@ -15,6 +15,10 @@ import 'logging_service.dart';
 /// メタデータファイルのパス定数
 const String _metadataFolderName = 'AIU';
 const String _metadataFileName = 'METADATA.JSON';
+const String _metadataTempSuffix = '.tmp';
+const String _metadataLockSuffix = '.lock';
+const int _metadataSaveMaxRetries = 3;
+const Duration _metadataSaveRetryDelay = Duration(milliseconds: 200);
 
 /// メタデータ管理サービス
 ///
@@ -45,11 +49,24 @@ class MetadataManager {
     return p.join(sdCardRoot, 'PRIVATE', _metadataFolderName);
   }
 
+  /// メタデータ一時ファイルのパスを取得
+  String get metadataTempFilePath {
+    return '$metadataFilePath$_metadataTempSuffix';
+  }
+
+  /// メタデータロックファイルのパスを取得
+  String get metadataLockFilePath {
+    return '$metadataFilePath$_metadataLockSuffix';
+  }
+
   /// メタデータを読み込む
   ///
   /// ファイルが存在しない場合は空のメタデータを返す。
   /// ファイルが破損している場合も空のメタデータを返す（エラーをログに記録）。
   Future<ImportMetadata> load() async {
+    await _waitForLockRelease();
+    await _recoverTempFileIfNeeded();
+
     final file = File(metadataFilePath);
 
     // ファイルが存在しない場合は空のメタデータを返す
@@ -110,45 +127,141 @@ class MetadataManager {
   Future<void> save(ImportMetadata metadata) async {
     final folder = Directory(metadataFolderPath);
     final file = File(metadataFilePath);
-    final tempFile = File('$metadataFilePath.tmp');
+    final tempFile = File(metadataTempFilePath);
+    final lockFile = File(metadataLockFilePath);
 
     _log.debug(
       'Saving metadata to: $metadataFilePath.',
       tag: 'MetadataManager',
     );
 
-    // フォルダを作成（存在しない場合）
-    if (!await folder.exists()) {
-      _log.debug(
-        'Creating metadata folder: $metadataFolderPath.',
-        tag: 'MetadataManager',
-      );
-      await folder.create(recursive: true);
+    for (var attempt = 1; attempt <= _metadataSaveMaxRetries; attempt++) {
+      RandomAccessFile? lockHandle;
+      try {
+        // フォルダを作成（存在しない場合）
+        if (!await folder.exists()) {
+          _log.debug(
+            'Creating metadata folder: $metadataFolderPath.',
+            tag: 'MetadataManager',
+          );
+          await folder.create(recursive: true);
+        }
+
+        // ロックファイルを作成して排他ロック
+        lockHandle = await lockFile.open(mode: FileMode.write);
+        await lockHandle.lock(FileLock.exclusive);
+
+        // JSON に変換（読みやすいフォーマット）
+        final encoder = JsonEncoder.withIndent('  ');
+        final jsonString = encoder.convert(metadata.toJson());
+
+        // 一時ファイルに書き込み
+        await tempFile.writeAsString(jsonString);
+
+        // 既存ファイルがあれば削除
+        if (await file.exists()) {
+          await file.delete();
+        }
+
+        // 一時ファイルをリネーム
+        await tempFile.rename(metadataFilePath);
+
+        // キャッシュを更新
+        _metadata = metadata;
+        _lastLoadedModified = (await file.stat()).modified;
+
+        _log.info(
+          'Metadata saved: ${metadata.files.length} file records.',
+          tag: 'MetadataManager',
+        );
+        return;
+      } catch (ex, stackTrace) {
+        _log.error(
+          'Failed to save metadata (attempt $attempt).',
+          tag: 'MetadataManager',
+          error: ex,
+          stackTrace: stackTrace,
+        );
+        await _cleanupTempFile();
+        if (attempt < _metadataSaveMaxRetries) {
+          await Future.delayed(
+            Duration(
+              milliseconds: _metadataSaveRetryDelay.inMilliseconds * attempt,
+            ),
+          );
+        }
+      } finally {
+        if (lockHandle != null) {
+          try {
+            await lockHandle.unlock();
+          } catch (_) {
+            // ロック解除に失敗した場合は後処理を続行する
+          }
+          await lockHandle.close();
+        }
+        await _cleanupLockFile();
+      }
     }
 
-    // JSON に変換（読みやすいフォーマット）
-    final encoder = JsonEncoder.withIndent('  ');
-    final jsonString = encoder.convert(metadata.toJson());
+    throw Exception('Failed to save metadata after $_metadataSaveMaxRetries attempts.');
+  }
 
-    // 一時ファイルに書き込み
-    await tempFile.writeAsString(jsonString);
+  /// ロックファイルが消えるまで待機する
+  Future<void> _waitForLockRelease() async {
+    final lockFile = File(metadataLockFilePath);
+    const maxRetries = 3;
+    var attempt = 0;
 
-    // 既存ファイルがあれば削除
-    if (await file.exists()) {
-      await file.delete();
+    while (await lockFile.exists() && attempt < maxRetries) {
+      await Future.delayed(Duration(milliseconds: 200 * (attempt + 1)));
+      attempt++;
+    }
+  }
+
+  /// 一時ファイルが残っている場合に復旧する
+  Future<void> _recoverTempFileIfNeeded() async {
+    final tempFile = File(metadataTempFilePath);
+    final file = File(metadataFilePath);
+
+    if (!await tempFile.exists()) {
+      return;
     }
 
-    // 一時ファイルをリネーム
-    await tempFile.rename(metadataFilePath);
+    // メタデータ本体がない場合は一時ファイルを復旧に使用する
+    if (!await file.exists()) {
+      try {
+        await tempFile.rename(metadataFilePath);
+        return;
+      } catch (_) {
+        // 復旧失敗時はクリーンアップに進む
+      }
+    }
 
-    // キャッシュを更新
-    _metadata = metadata;
-    _lastLoadedModified = (await file.stat()).modified;
+    await _cleanupTempFile();
+  }
 
-    _log.info(
-      'Metadata saved: ${metadata.files.length} file records.',
-      tag: 'MetadataManager',
-    );
+  /// 一時ファイルを削除する
+  Future<void> _cleanupTempFile() async {
+    final tempFile = File(metadataTempFilePath);
+    if (await tempFile.exists()) {
+      try {
+        await tempFile.delete();
+      } catch (_) {
+        // 削除できない場合は次回の復旧処理に任せる
+      }
+    }
+  }
+
+  /// ロックファイルを削除する
+  Future<void> _cleanupLockFile() async {
+    final lockFile = File(metadataLockFilePath);
+    if (await lockFile.exists()) {
+      try {
+        await lockFile.delete();
+      } catch (_) {
+        // 削除できない場合は次回の保存で上書きする
+      }
+    }
   }
 
   /// 単一のレコードを追加して保存

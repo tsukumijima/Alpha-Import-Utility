@@ -9,14 +9,14 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../models/import_result.dart';
 import '../models/media_file.dart';
 import '../models/settings.dart';
-import '../models/import_result.dart';
-import '../utils/hash_utils.dart';
 import '../utils/file_utils.dart';
-import 'sony_filesystem.dart';
-import 'metadata_manager.dart';
+import '../utils/hash_utils.dart';
 import 'logging_service.dart';
+import 'metadata_manager.dart';
+import 'sony_filesystem.dart';
 
 /// アプリバージョン（メタデータ記録用）
 const String _appVersion = '1.0.0';
@@ -112,6 +112,14 @@ class ImportEngine {
       final scanResult = await _sonyFs.scanMediaFiles(settings);
       final mediaFiles = scanResult.mediaFiles;
       warnings.addAll(scanResult.warnings);
+      mediaFiles.sort((a, b) {
+        final dateCompare = a.effectiveDateTime.compareTo(b.effectiveDateTime);
+        if (dateCompare != 0) {
+          return dateCompare;
+        }
+        return a.relativePath.compareTo(b.relativePath);
+      });
+      _log.debug('Sorted media files by capture datetime.', tag: 'ImportEngine');
       _log.info('Found ${mediaFiles.length} media files to import.', tag: 'ImportEngine');
 
       _log.logImportStarted(sdCardRoot, mediaFiles.length);
@@ -200,19 +208,13 @@ class ImportEngine {
               try {
                 await _metadataManager.addRecord(record);
               } catch (ex, stackTrace) {
-                warnings.add(
-                  ImportWarning(
-                    type: ImportWarningType.MetadataUpdateSkipped,
-                    file: mediaFile,
-                    message: 'Failed to update metadata file, import state may be incomplete.',
-                  ),
-                );
                 _log.error(
-                  'Failed to update metadata file.',
+                  'Failed to update metadata file, aborting import.',
                   tag: 'ImportEngine',
                   error: ex,
                   stackTrace: stackTrace,
                 );
+                throw Exception('Metadata update failed.');
               }
               importedFiles.add(record);
             }
@@ -270,9 +272,9 @@ class ImportEngine {
   /// 単一ファイルの取り込み処理
   Future<_FileProcessResult> _processFile(
     MediaFile file,
-    List<ImportWarning> warnings,
-    {void Function(int bytesCopied)? onCopyProgress,}
-  ) async {
+    List<ImportWarning> warnings, {
+    void Function(int bytesCopied)? onCopyProgress,
+  }) async {
     try {
       // EXIF/メタデータの読み取り失敗を警告として記録
       if (file.type.isPhoto && !file.isExifDateTimeValid) {
@@ -347,6 +349,8 @@ class ImportEngine {
       await _copyFileWithHash(file, warnings, onCopyProgress: onCopyProgress);
 
       return _FileProcessResult.imported;
+    } on UnsupportedError {
+      rethrow;
     } catch (ex) {
       warnings.add(
         ImportWarning(
@@ -386,9 +390,9 @@ class ImportEngine {
   /// ファイルをコピーしてハッシュを計算
   Future<void> _copyFileWithHash(
     MediaFile file,
-    List<ImportWarning> warnings,
-    {void Function(int bytesCopied)? onCopyProgress,}
-  ) async {
+    List<ImportWarning> warnings, {
+    void Function(int bytesCopied)? onCopyProgress,
+  }) async {
     final sourceFile = File(file.absolutePath);
     final destFolder = _getDestinationFolder(file);
 
@@ -468,12 +472,14 @@ class ImportEngine {
           try {
             final targetDateTime = _resolveRestoreDateTime(file);
             await restoreFileDateTime(destFile, targetDateTime);
-          } catch (_) {
+          } on UnsupportedError {
+            rethrow;
+          } catch (ex) {
             warnings.add(
               ImportWarning(
                 type: ImportWarningType.DateRestoreFailed,
                 file: file,
-                message: 'Failed to restore file datetime.',
+                message: 'Failed to restore file datetime: $ex.',
               ),
             );
           }
@@ -486,6 +492,15 @@ class ImportEngine {
         // 成功
         _log.logFileCopied(file.relativePath, destPath);
         return;
+      } on UnsupportedError {
+        if (await destFile.exists()) {
+          try {
+            await destFile.delete();
+          } catch (_) {
+            // コピー失敗時の残骸削除に失敗しても中断を優先する
+          }
+        }
+        rethrow;
       } catch (ex) {
         if (await destFile.exists()) {
           try {

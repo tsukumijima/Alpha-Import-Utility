@@ -41,6 +41,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.2"
+  brotli:
+    dependency: transitive
+    description:
+      name: brotli
+      sha256: "7f891558ed779aab2bed874f0a36b8123f9ff3f19cf6efbee89e18ed294945ae"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.6.0"
   build:
     dependency: transitive
     description:
@@ -193,14 +201,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.7"
-  exif:
+  exif_reader:
     dependency: "direct main"
     description:
-      name: exif
-      sha256: a7980fdb3b7ffcd0b035e5b8a5e1eef7cadfe90ea6a4e85ebb62f87b96c7a172
+      name: exif_reader
+      sha256: e444a649ed865efbde425875206d0795cea2b3c793efc582ad328d2740806f5e
       url: "https://pub.dev"
     source: hosted
-    version: "3.3.0"
+    version: "4.0.2"
   fake_async:
     dependency: transitive
     description:
@@ -312,6 +320,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.5"
+  iso_base_media:
+    dependency: transitive
+    description:
+      name: iso_base_media
+      sha256: "0bd81707d2608b63d30e99b4ad89ad189a438c03842a480fb593641939bc534a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.3.0"
   json_annotation:
     dependency: "direct main"
     description:
@@ -512,6 +528,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.0"
+  random_access_source:
+    dependency: "direct main"
+    description:
+      name: random_access_source
+      sha256: "2cb3578e3027d6f7e44a66ec9bf72f5e0b73e9c0e62f4768977a0ed962d08be7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.2.1"
   screen_retriever:
     dependency: transitive
     description:

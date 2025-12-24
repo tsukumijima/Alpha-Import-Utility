@@ -17,7 +17,8 @@ dependencies:
   path_provider: ^2.1.0
   path: ^1.9.0
   # EXIF 読み取り（ARW/HEIF/JPEG 対応）
-  exif: ^3.3.0
+  exif_reader: ^4.0.2
+  random_access_source: ^4.2.1
   # ハッシュ計算（高速・ストリーミング対応）
   xxh3: ^1.1.0
   # XML パース（動画メタデータ読み取り用）

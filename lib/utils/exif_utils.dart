@@ -6,8 +6,11 @@ library;
 
 import 'dart:io';
 
-import 'package:exif/exif.dart';
+import 'package:exif_reader/exif_reader.dart';
+import 'package:random_access_source/random_access_source.dart';
 import 'package:xml/xml.dart';
+
+import 'timezone_utils.dart';
 
 /// EXIF から読み取った日時情報
 class ExifDateTime {
@@ -42,29 +45,61 @@ class ExifDateTime {
 /// 画像ファイルから EXIF 日時を読み取る
 ///
 /// [file] は JPEG、ARW、または HEIF ファイル。
+/// EXIF のタイムゾーン情報があればそれを優先し、無い場合は
+/// [cameraTimezone] をフォールバックとして使用する。
 /// 読み取りに失敗した場合は全フィールドが null の ExifDateTime を返す。
 ///
 /// 例:
 /// ```dart
-/// final exifDateTime = await readExifDateTime(File('DSC00001.ARW'));
+/// final exifDateTime = await readExifDateTime(
+///   File('DSC00001.ARW'),
+///   cameraTimezone: 'Asia/Tokyo',
+/// );
 /// if (exifDateTime.bestDateTime != null) {
 ///   print('撮影日時: ${exifDateTime.bestDateTime}');
 /// }
 /// ```
-Future<ExifDateTime> readExifDateTime(File file) async {
+Future<ExifDateTime> readExifDateTime(
+  File file, {
+  required String cameraTimezone,
+}) async {
   try {
-    final bytes = await file.readAsBytes();
-    final tags = await readExifFromBytes(bytes);
+    final source = await FileRASource.openPath(file.path);
+    try {
+      final exif = await readExifFromSource(source);
+      if (exif.tags.isEmpty) {
+        return ExifDateTime();
+      }
 
-    if (tags.isEmpty) {
-      return ExifDateTime();
+      final dateTimeOriginal = _parseExifDateTag(exif.tags['EXIF DateTimeOriginal']);
+      final dateTimeDigitized = _parseExifDateTag(exif.tags['EXIF DateTimeDigitized']);
+      final dateTime = _parseExifDateTag(exif.tags['Image DateTime']);
+
+      final offsetOriginal = _parseExifOffsetTag(exif.tags['EXIF OffsetTimeOriginal']);
+      final offsetDigitized = _parseExifOffsetTag(exif.tags['EXIF OffsetTimeDigitized']);
+      final offsetDefault =
+          _parseExifOffsetTag(exif.tags['EXIF OffsetTime']) ?? _parseExifOffsetTag(exif.tags['Image OffsetTime']);
+
+      return ExifDateTime(
+        dateTimeOriginal: _applyTimezoneOffset(
+          dateTimeOriginal,
+          offsetOriginal ?? offsetDefault,
+          cameraTimezone,
+        ),
+        dateTimeDigitized: _applyTimezoneOffset(
+          dateTimeDigitized,
+          offsetDigitized ?? offsetDefault,
+          cameraTimezone,
+        ),
+        dateTime: _applyTimezoneOffset(
+          dateTime,
+          offsetDefault,
+          cameraTimezone,
+        ),
+      );
+    } finally {
+      await source.close();
     }
-
-    return ExifDateTime(
-      dateTimeOriginal: _parseExifDateTag(tags['EXIF DateTimeOriginal']),
-      dateTimeDigitized: _parseExifDateTag(tags['EXIF DateTimeDigitized']),
-      dateTime: _parseExifDateTag(tags['Image DateTime']),
-    );
   } catch (ex) {
     // EXIF 読み取りエラー（対応していないフォーマット、ファイル破損など）
     return ExifDateTime();
@@ -77,7 +112,7 @@ Future<ExifDateTime> readExifDateTime(File file) async {
 DateTime? _parseExifDateTag(IfdTag? tag) {
   if (tag == null) return null;
 
-  final value = tag.printable;
+  final value = tag.printable.trim();
   if (value.isEmpty) return null;
 
   try {
@@ -103,11 +138,51 @@ DateTime? _parseExifDateTag(IfdTag? tag) {
   }
 }
 
+/// EXIF の OffsetTime 系タグをパースして Duration に変換
+Duration? _parseExifOffsetTag(IfdTag? tag) {
+  if (tag == null) return null;
+
+  final value = tag.printable.trim();
+  if (value.isEmpty) return null;
+
+  return parseUtcOffset(value);
+}
+
+/// EXIF のローカル時刻にタイムゾーンオフセットを適用
+///
+/// オフセットが null の場合は cameraTimezone から取得する。
+DateTime? _applyTimezoneOffset(
+  DateTime? localDateTime,
+  Duration? exifOffset,
+  String cameraTimezone,
+) {
+  if (localDateTime == null) return null;
+
+  final offset = exifOffset ?? getTimezoneOffsetDuration(cameraTimezone);
+  if (offset == null) {
+    return localDateTime;
+  }
+
+  final utc = DateTime.utc(
+    localDateTime.year,
+    localDateTime.month,
+    localDateTime.day,
+    localDateTime.hour,
+    localDateTime.minute,
+    localDateTime.second,
+    localDateTime.millisecond,
+    localDateTime.microsecond,
+  ).subtract(offset);
+
+  return utc.toLocal();
+}
+
 /// 動画 XML ファイル（NonRealTimeMeta）から撮影日時を読み取る
 ///
 /// Sony カメラが生成する XML ファイルの CreationDate 要素から
 /// 撮影日時を取得する。タイムゾーン情報が含まれる場合は
 /// ローカル時刻に変換して返す。
+/// タイムゾーン情報が無い場合は [cameraTimezone] をフォールバックとして使用する。
 ///
 /// 例:
 /// ```dart
@@ -116,7 +191,10 @@ DateTime? _parseExifDateTag(IfdTag? tag) {
 ///   print('撮影日時: $dateTime');
 /// }
 /// ```
-Future<DateTime?> readVideoXmlDateTime(File xmlFile) async {
+Future<DateTime?> readVideoXmlDateTime(
+  File xmlFile, {
+  required String cameraTimezone,
+}) async {
   try {
     final content = await xmlFile.readAsString();
     final document = XmlDocument.parse(content);
@@ -135,7 +213,30 @@ Future<DateTime?> readVideoXmlDateTime(File xmlFile) async {
     }
 
     // ISO 8601 形式でパース
-    return DateTime.parse(valueAttr).toLocal();
+    final hasOffset = RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(valueAttr);
+    final parsed = DateTime.parse(valueAttr);
+
+    if (hasOffset) {
+      return parsed.toLocal();
+    }
+
+    final cameraOffset = getTimezoneOffsetDuration(cameraTimezone);
+    if (cameraOffset == null) {
+      return parsed;
+    }
+
+    final utc = DateTime.utc(
+      parsed.year,
+      parsed.month,
+      parsed.day,
+      parsed.hour,
+      parsed.minute,
+      parsed.second,
+      parsed.millisecond,
+      parsed.microsecond,
+    ).subtract(cameraOffset);
+
+    return utc.toLocal();
   } catch (ex) {
     // XML パースエラーまたは日付パースエラー
     return null;
@@ -183,11 +284,17 @@ Future<File?> findVideoXmlFile(File videoFile) async {
 /// ```dart
 /// final dateTime = await readVideoDateTime(File('C0079.MP4'));
 /// ```
-Future<DateTime?> readVideoDateTime(File videoFile) async {
+Future<DateTime?> readVideoDateTime(
+  File videoFile, {
+  required String cameraTimezone,
+}) async {
   final xmlFile = await findVideoXmlFile(videoFile);
   if (xmlFile == null) {
     return null;
   }
 
-  return readVideoXmlDateTime(xmlFile);
+  return readVideoXmlDateTime(
+    xmlFile,
+    cameraTimezone: cameraTimezone,
+  );
 }

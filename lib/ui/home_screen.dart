@@ -177,7 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// デバイスタイプ別にフィルタ
   List<DetectedDevice> _getDevicesByType(DeviceType type) {
-    return _devices.where((d) => d.type == type && d.isSonyAlphaCard).toList();
+    return _devices.where((d) => d.type == type).toList();
   }
 
   /// USB ストレージ（カメラ直接接続）を取得

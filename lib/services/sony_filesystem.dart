@@ -298,10 +298,16 @@ class SonyFilesystemService {
     final warnings = <ImportWarning>[];
 
     // 1. DCIM フォルダ内の静止画をスキャン
+    final photoFiles = <MediaFile>[];
     for (final dcfPath in validation.dcfFolders) {
-      final photos = await _scanPhotosInFolder(dcfPath, warnings);
-      mediaFiles.addAll(photos);
+      final photos = await _scanPhotosInFolder(
+        dcfPath,
+        warnings,
+        cameraTimezone: settings.cameraTimezone,
+      );
+      photoFiles.addAll(photos);
     }
+    mediaFiles.addAll(_applyRawExifFallback(photoFiles));
 
     // 2. PRIVATE/M4ROOT/CLIP 内の動画をスキャン
     final clipPath = await _getClipPath();
@@ -311,6 +317,7 @@ class SonyFilesystemService {
         isProxyFolder: false,
         includeXml: settings.isImportVideoXML,
         warnings: warnings,
+        cameraTimezone: settings.cameraTimezone,
       );
       mediaFiles.addAll(videos);
     }
@@ -324,6 +331,7 @@ class SonyFilesystemService {
           isProxyFolder: true,
           includeXml: false, // SUB フォルダの XML は取り込まない
           warnings: warnings,
+          cameraTimezone: settings.cameraTimezone,
         );
         mediaFiles.addAll(proxyVideos);
       }
@@ -357,11 +365,64 @@ class SonyFilesystemService {
     return _findCaseInsensitiveDirectory(m4rootPath, 'SUB');
   }
 
+  /// RAW ファイルの EXIF を JPEG/HIF から補完する
+  ///
+  /// RAW に EXIF が無い場合、同一フォルダ内で同じベース名の JPEG/HIF が
+  /// 持つ EXIF をフォールバックとして適用する。
+  List<MediaFile> _applyRawExifFallback(List<MediaFile> photoFiles) {
+    final fallbackByKey = <String, DateTime>{};
+
+    for (final file in photoFiles) {
+      if (file.type == MediaType.JPEGPhoto || file.type == MediaType.HEIFPhoto) {
+        if (file.isExifDateTimeValid) {
+          fallbackByKey[_buildBaseNameKey(file)] = file.exifDateTime!;
+        }
+      }
+    }
+
+    if (fallbackByKey.isEmpty) {
+      return photoFiles;
+    }
+
+    return photoFiles.map((file) {
+      if (file.type == MediaType.RAWPhoto && !file.isExifDateTimeValid) {
+        final fallback = fallbackByKey[_buildBaseNameKey(file)];
+        if (fallback != null) {
+          return _copyMediaFileWithExifDateTime(file, fallback);
+        }
+      }
+      return file;
+    }).toList();
+  }
+
+  /// フォルダ単位でベース名の一致判定に使うキーを生成する
+  String _buildBaseNameKey(MediaFile file) {
+    final directory = p.dirname(file.relativePath);
+    return '$directory|${file.baseName}';
+  }
+
+  /// EXIF 日時のみを差し替えた MediaFile を生成する
+  MediaFile _copyMediaFileWithExifDateTime(MediaFile file, DateTime exifDateTime) {
+    return MediaFile(
+      relativePath: file.relativePath,
+      fileName: file.fileName,
+      baseName: file.baseName,
+      extension: file.extension,
+      type: file.type,
+      fileSize: file.fileSize,
+      exifDateTime: exifDateTime,
+      fileModifiedTime: file.fileModifiedTime,
+      sdCardRoot: file.sdCardRoot,
+      xxHash: file.xxHash,
+    );
+  }
+
   /// フォルダ内の静止画をスキャン
   Future<List<MediaFile>> _scanPhotosInFolder(
     String folderPath,
-    List<ImportWarning> warnings,
-  ) async {
+    List<ImportWarning> warnings, {
+    required String cameraTimezone,
+  }) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
 
@@ -380,7 +441,11 @@ class SonyFilesystemService {
 
           final ext = getExtension(fileName).toLowerCase();
           if (_photoExtensions.contains(ext)) {
-            final mediaFile = await _createMediaFile(entity, isProxyFolder: false);
+            final mediaFile = await _createMediaFile(
+              entity,
+              isProxyFolder: false,
+              cameraTimezone: cameraTimezone,
+            );
             if (mediaFile != null) {
               files.add(mediaFile);
             }
@@ -402,6 +467,7 @@ class SonyFilesystemService {
     required bool isProxyFolder,
     required bool includeXml,
     required List<ImportWarning> warnings,
+    required String cameraTimezone,
   }) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
@@ -423,14 +489,22 @@ class SonyFilesystemService {
 
           // 動画ファイル
           if (_videoExtensions.contains(ext)) {
-            final mediaFile = await _createMediaFile(entity, isProxyFolder: isProxyFolder);
+            final mediaFile = await _createMediaFile(
+              entity,
+              isProxyFolder: isProxyFolder,
+              cameraTimezone: cameraTimezone,
+            );
             if (mediaFile != null) {
               files.add(mediaFile);
             }
           }
           // XML ファイル（設定で有効な場合のみ）
           else if (includeXml && _metaExtensions.contains(ext)) {
-            final mediaFile = await _createMediaFile(entity, isProxyFolder: false);
+            final mediaFile = await _createMediaFile(
+              entity,
+              isProxyFolder: false,
+              cameraTimezone: cameraTimezone,
+            );
             if (mediaFile != null) {
               files.add(mediaFile);
             }
@@ -483,7 +557,11 @@ class SonyFilesystemService {
   }
 
   /// MediaFile オブジェクトを作成
-  Future<MediaFile?> _createMediaFile(File file, {required bool isProxyFolder}) async {
+  Future<MediaFile?> _createMediaFile(
+    File file, {
+    required bool isProxyFolder,
+    required String cameraTimezone,
+  }) async {
     try {
       final fileName = p.basename(file.path);
       final ext = getExtension(fileName);
@@ -500,10 +578,16 @@ class SonyFilesystemService {
       // EXIF/メタデータから日時を取得
       DateTime? exifDateTime;
       if (mediaType.isPhoto) {
-        final exifData = await readExifDateTime(file);
+        final exifData = await readExifDateTime(
+          file,
+          cameraTimezone: cameraTimezone,
+        );
         exifDateTime = exifData.bestDateTime;
       } else if (mediaType == MediaType.Video) {
-        exifDateTime = await readVideoDateTime(file);
+        exifDateTime = await readVideoDateTime(
+          file,
+          cameraTimezone: cameraTimezone,
+        );
       }
 
       return MediaFile(

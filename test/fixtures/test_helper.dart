@@ -77,6 +77,8 @@ class MockMediaFile {
   final int size;
 
   /// ファイルの更新日時
+  ///
+  /// 未指定の場合は現在時刻から 1 分前に設定する。
   final DateTime? modifiedTime;
 
   const MockMediaFile({
@@ -101,9 +103,8 @@ class MockMediaFile {
     await file.writeAsBytes(data);
 
     // 更新日時を設定
-    if (modifiedTime != null) {
-      await file.setLastModified(modifiedTime!);
-    }
+    final targetModifiedTime = modifiedTime ?? DateTime.now().subtract(const Duration(minutes: 1));
+    await file.setLastModified(targetModifiedTime);
   }
 
   /// JPEG ファイルのモック
@@ -169,6 +170,7 @@ Future<void> createMockMetadataJson(
   await metadataFile.writeAsString(content);
 }
 
+/// メタデータの files 配列を JSON 文字列に変換する
 String _filesToJson(List<Map<String, dynamic>> files) {
   if (files.isEmpty) return '[]';
 
@@ -182,6 +184,7 @@ String _filesToJson(List<Map<String, dynamic>> files) {
   return buffer.toString();
 }
 
+/// Map を JSON 文字列に変換する
 String _mapToJson(Map<String, dynamic> map) {
   final entries = map.entries
       .map((e) {

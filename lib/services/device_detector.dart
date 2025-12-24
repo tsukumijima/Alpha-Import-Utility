@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:disks_desktop/disks_desktop.dart';
+import 'package:path/path.dart' as p;
 
 import 'sony_filesystem.dart';
 import 'logging_service.dart';
@@ -230,6 +231,7 @@ class DeviceDetector {
   /// 内部スキャン処理
   Future<List<DetectedDevice>> _scanInternal() async {
     final devices = <DetectedDevice>[];
+    final seenMountPoints = <String>{};
 
     // disks_desktop パッケージでディスク一覧を取得
     final repository = DisksRepository();
@@ -253,17 +255,29 @@ class DeviceDetector {
         continue;
       }
 
-      // PMHOME ボリュームはスキップ（ライセンス情報のみ）
-      if (volumeName.toUpperCase() == 'PMHOME') {
-        _log.debug('Skipping PMHOME volume (license info only).', tag: 'DeviceDetector');
-        continue;
-      }
-
       // マウントポイントを取得
       if (mountPoints.isEmpty) {
         _log.debug('Skipping disk with no mount points: $volumeName.', tag: 'DeviceDetector');
         continue;
       }
+
+      // PMHOME ボリュームはスキップ（ライセンス情報のみ）
+      final isPmhomeVolume = volumeName.toUpperCase() == 'PMHOME' || p.basename(mountPoint).toUpperCase() == 'PMHOME';
+      if (isPmhomeVolume) {
+        _log.debug('Skipping PMHOME volume (license info only).', tag: 'DeviceDetector');
+        continue;
+      }
+
+      // 同一マウントポイントの重複を排除
+      final normalizedMountPoint = _normalizeMountPoint(mountPoint);
+      if (seenMountPoints.contains(normalizedMountPoint)) {
+        _log.debug(
+          'Skipping duplicated mount point: $mountPoint.',
+          tag: 'DeviceDetector',
+        );
+        continue;
+      }
+      seenMountPoints.add(normalizedMountPoint);
 
       // macOS システムボリュームを除外
       if (_shouldExcludeDevice(mountPoint, volumeName)) {
@@ -296,6 +310,23 @@ class DeviceDetector {
     }
 
     return devices;
+  }
+
+  /// マウントポイントを正規化する
+  ///
+  /// 大文字小文字の違いや末尾の区切り文字差を吸収する。
+  String _normalizeMountPoint(String mountPoint) {
+    var normalized = mountPoint.trim();
+
+    if (normalized.length > 1 && normalized.endsWith(Platform.pathSeparator)) {
+      normalized = normalized.substring(0, normalized.length - 1);
+    }
+
+    if (Platform.isWindows) {
+      normalized = normalized.toLowerCase();
+    }
+
+    return normalized;
   }
 
   /// デバイスを除外すべきかどうかを判定

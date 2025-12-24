@@ -3,11 +3,16 @@
 /// SD カード構造の検証とメディアファイルスキャン機能をテストする。
 library;
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:alpha_import_utility/models/media_file.dart';
+import 'package:alpha_import_utility/models/import_result.dart';
 import 'package:alpha_import_utility/models/settings.dart';
 import 'package:alpha_import_utility/services/sony_filesystem.dart';
+import 'package:alpha_import_utility/utils/exif_utils.dart';
 import '../fixtures/test_helper.dart';
 
 void main() {
@@ -376,6 +381,123 @@ void main() {
           await cleanup();
         }
       });
+
+      test('未知の拡張子は警告として記録される', () async {
+        final (tempDir, cleanup) = await createTempDirectory();
+
+        try {
+          await createMockSdCardStructure(
+            tempDir,
+            mockFiles: [
+              MockMediaFile.jpeg('DSC00001'),
+              const MockMediaFile(
+                relativePath: 'DCIM/100MSDCF/DSC00002.AAA',
+                size: 1024,
+              ),
+            ],
+          );
+          final service = SonyFilesystemService(tempDir);
+          final settings = ImportSettings.defaults();
+
+          final scanResult = await service.scanMediaFiles(settings);
+
+          expect(scanResult.mediaFiles.length, equals(1));
+          expect(
+            scanResult.warnings.where((w) => w.type == ImportWarningType.UnknownExtensionFound).length,
+            equals(1),
+          );
+        } finally {
+          await cleanup();
+        }
+      });
+
+      test(
+        'RAW が EXIF を持たない場合は JPEG/HIF の EXIF をフォールバックする',
+        () async {
+          final sampleDir = Directory(p.join('test', 'fixtures', 'sample_media'));
+          if (!sampleDir.existsSync()) {
+            return;
+          }
+
+          final (tempDir, cleanup) = await createTempDirectory();
+
+          try {
+            await createMockSdCardStructure(tempDir);
+            final targetDir = Directory(p.join(tempDir, 'DCIM', '100MSDCF'));
+
+            final sampleFiles = sampleDir.listSync().whereType<File>().where((file) {
+              final extension = p.extension(file.path).toLowerCase();
+              return [
+                '.jpg',
+                '.jpeg',
+                '.arw',
+                '.hif',
+                '.heif',
+              ].contains(extension);
+            }).toList();
+
+            if (sampleFiles.isEmpty) {
+              return;
+            }
+
+            for (final file in sampleFiles) {
+              await file.copy(p.join(targetDir.path, p.basename(file.path)));
+            }
+
+            final rawExifByBaseName = <String, DateTime?>{};
+            final fallbackExifByBaseName = <String, DateTime>{};
+
+            for (final file in sampleFiles) {
+              final extension = p.extension(file.path).toLowerCase();
+              final baseName = p.basenameWithoutExtension(file.path);
+
+              if (extension == '.arw') {
+                final exif = await readExifDateTime(
+                  file,
+                  cameraTimezone: 'Asia/Tokyo',
+                );
+                rawExifByBaseName[baseName] = exif.bestDateTime;
+                continue;
+              }
+
+              if (extension == '.jpg' || extension == '.jpeg' || extension == '.hif' || extension == '.heif') {
+                final exif = await readExifDateTime(
+                  file,
+                  cameraTimezone: 'Asia/Tokyo',
+                );
+                if (exif.bestDateTime != null) {
+                  fallbackExifByBaseName[baseName] = exif.bestDateTime!;
+                }
+              }
+            }
+
+            final targetBaseNames = rawExifByBaseName.entries
+                .where(
+                  (entry) => entry.value == null && fallbackExifByBaseName.containsKey(entry.key),
+                )
+                .map((entry) => entry.key)
+                .toList();
+
+            if (targetBaseNames.isEmpty) {
+              return;
+            }
+
+            final service = SonyFilesystemService(tempDir);
+            final settings = ImportSettings.defaults();
+            final scanResult = await service.scanMediaFiles(settings);
+
+            for (final baseName in targetBaseNames) {
+              final rawFile = scanResult.mediaFiles.firstWhere(
+                (file) => file.type == MediaType.RAWPhoto && file.baseName == baseName,
+              );
+              expect(rawFile.exifDateTime, equals(fallbackExifByBaseName[baseName]));
+            }
+          } finally {
+            await cleanup();
+          }
+        },
+        skip: !Directory(p.join('test', 'fixtures', 'sample_media')).existsSync(),
+      );
 
       test('相対パスが正しく設定される', () async {
         final (tempDir, cleanup) = await createTempDirectory();
