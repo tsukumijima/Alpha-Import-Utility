@@ -90,7 +90,11 @@ Future<ExifDateTime> readExifDateTime(
   try {
     final source = await FileRASource.openPath(file.path);
     try {
-      final exif = await readExifFromSource(source);
+      final exif = await readExifFromSource(
+        source,
+        details: false,
+        truncateTags: true,
+      );
       if (exif.tags.isEmpty) {
         return ExifDateTime();
       }

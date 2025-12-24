@@ -50,7 +50,7 @@ class MainFlutterWindow: NSWindow {
       return
     }
 
-    let url = URL(fileURLWithPath: path)
+    var url = URL(fileURLWithPath: path)
     let creationDate = Date(timeIntervalSince1970: TimeInterval(creationMs) / 1000)
     let modifiedDate = Date(timeIntervalSince1970: TimeInterval(modifiedMs) / 1000)
 

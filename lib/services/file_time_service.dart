@@ -47,7 +47,7 @@ class FileTimeService {
       {'path': path},
     );
     if (result == null) {
-      throw Exception('Failed to read file times.');
+      throw Exception('Failed to read file times for: $path');
     }
 
     return (

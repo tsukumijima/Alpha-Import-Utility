@@ -668,6 +668,14 @@ class SonyFilesystemService {
       // ファイル名でソート
       entities.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
 
+      _log.debug(
+        'Scanning photo folder: $folderPath (${entities.length} entries).',
+        tag: 'SonyFilesystem',
+      );
+
+      int processedCount = 0;
+      const int progressLogInterval = 50;
+
       for (final entity in entities) {
         if (entity is File) {
           final fileName = p.basename(entity.path);
@@ -689,10 +697,26 @@ class SonyFilesystemService {
           } else if (ext.isNotEmpty) {
             await _addUnknownExtensionWarning(entity, warnings);
           }
+
+          processedCount += 1;
+          if (processedCount % progressLogInterval == 0) {
+            _log.debug(
+              'Photo scan progress: $processedCount/${entities.length} in $folderPath (last: $fileName).',
+              tag: 'SonyFilesystem',
+            );
+            await Future<void>.delayed(Duration.zero);
+          }
         }
       }
-    } catch (_) {
-      // フォルダ読み取りエラー
+      _log.debug(
+        'Photo scan completed: $folderPath (${files.length} files).',
+        tag: 'SonyFilesystem',
+      );
+    } catch (ex) {
+      _log.warning(
+        'Error scanning photo folder: $folderPath. Reason: $ex.',
+        tag: 'SonyFilesystem',
+      );
     }
 
     return files;
@@ -715,6 +739,14 @@ class SonyFilesystemService {
 
       // ファイル名でソート
       entities.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
+
+      _log.debug(
+        'Scanning video folder: $folderPath (${entities.length} entries).',
+        tag: 'SonyFilesystem',
+      );
+
+      int processedCount = 0;
+      const int progressLogInterval = 50;
 
       for (final entity in entities) {
         if (entity is File) {
@@ -751,10 +783,26 @@ class SonyFilesystemService {
           } else if (!_metaExtensions.contains(ext) && ext.isNotEmpty) {
             await _addUnknownExtensionWarning(entity, warnings);
           }
+
+          processedCount += 1;
+          if (processedCount % progressLogInterval == 0) {
+            _log.debug(
+              'Video scan progress: $processedCount/${entities.length} in $folderPath (last: $fileName).',
+              tag: 'SonyFilesystem',
+            );
+            await Future<void>.delayed(Duration.zero);
+          }
         }
       }
-    } catch (_) {
-      // フォルダ読み取りエラー
+      _log.debug(
+        'Video scan completed: $folderPath (${files.length} files).',
+        tag: 'SonyFilesystem',
+      );
+    } catch (ex) {
+      _log.warning(
+        'Error scanning video folder: $folderPath. Reason: $ex.',
+        tag: 'SonyFilesystem',
+      );
     }
 
     return files;
@@ -812,8 +860,13 @@ class SonyFilesystemService {
     required String cameraTimezone,
     required int restoreToleranceSeconds,
   }) async {
+    final filePath = file.path;
+    final stopwatch = Stopwatch()..start();
+    final statStopwatch = Stopwatch();
+    final fileTimesStopwatch = Stopwatch();
+    Stopwatch? exifStopwatch;
     try {
-      final fileName = p.basename(file.path);
+      final fileName = p.basename(filePath);
       final ext = getExtension(fileName);
       final baseName = getBaseName(fileName);
 
@@ -822,8 +875,12 @@ class SonyFilesystemService {
       if (mediaType == null) return null;
 
       // ファイル情報を取得
+      statStopwatch.start();
       final stat = await file.stat();
+      statStopwatch.stop();
+      fileTimesStopwatch.start();
       final sourceTimes = await _getSourceFileTimes(file, stat);
+      fileTimesStopwatch.stop();
       final referenceUtcMs = _getReferenceUtcMs(sourceTimes);
       final relativePath = _getRelativePath(file.path);
 
@@ -835,18 +892,22 @@ class SonyFilesystemService {
       double? frameRate;
 
       if (mediaType.isPhoto) {
+        exifStopwatch = Stopwatch()..start();
         final exifData = await readExifDateTime(
           file,
           cameraTimezone: cameraTimezone,
         );
+        exifStopwatch.stop();
         exifDateTimeLocal = exifData.bestLocalDateTime;
         exifDateTimeUtcMs = exifData.bestUtcDateTime?.millisecondsSinceEpoch;
         hasExifTimezone = exifData.hasTimezoneOffset;
       } else if (mediaType == MediaType.Video) {
+        exifStopwatch = Stopwatch()..start();
         final videoDateTime = await readVideoDateTime(
           file,
           cameraTimezone: cameraTimezone,
         );
+        exifStopwatch.stop();
         exifDateTimeLocal = videoDateTime?.localDateTime;
         exifDateTimeUtcMs = videoDateTime?.utcDateTime?.millisecondsSinceEpoch;
         hasExifTimezone = videoDateTime?.hasTimezoneOffset ?? false;
@@ -892,9 +953,26 @@ class SonyFilesystemService {
         captureLocalDateTime: captureLocalDateTime,
         sdCardRoot: rootPath,
       );
-    } catch (_) {
-      // ファイル情報取得エラー
+    } catch (ex) {
+      _log.warning(
+        'Failed to create MediaFile for $filePath. Reason: $ex.',
+        tag: 'SonyFilesystem',
+      );
       return null;
+    } finally {
+      stopwatch.stop();
+      final shouldLogDuration = stopwatch.elapsedMilliseconds >= 1000;
+      if (shouldLogDuration) {
+        final statMs = statStopwatch.elapsedMilliseconds;
+        final fileTimesMs = fileTimesStopwatch.elapsedMilliseconds;
+        final exifMs = exifStopwatch?.elapsedMilliseconds ?? 0;
+        _log.debug(
+          'MediaFile creation took ${stopwatch.elapsedMilliseconds}ms '
+          '(stat=${statMs}ms, fileTimes=${fileTimesMs}ms, exif=${exifMs}ms) '
+          'for $filePath.',
+          tag: 'SonyFilesystem',
+        );
+      }
     }
   }
 

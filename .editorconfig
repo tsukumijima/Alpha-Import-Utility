@@ -11,17 +11,17 @@ trim_trailing_whitespace = true
 [*.md]
 trim_trailing_whitespace = false
 
-[*.dart]
+[*.cpp]
 indent_size = 2
 
-[*.cpp]
+[*.dart]
 indent_size = 2
 
 [*.swift]
 indent_size = 2
 
-[*.yml]
+[*.yaml]
 indent_size = 2
 
-[*.yaml]
+[*.yml]
 indent_size = 2

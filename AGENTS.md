@@ -144,6 +144,24 @@ EXIF OffsetTimeOriginal → EXIF OffsetTime → cameraTimezone 設定
 
 撮影日時の内部表現は UTC ミリ秒（絶対時刻）で保持し、サブフォルダ命名や UI 表示にはカメラのローカル時刻を使います。
 
+### 撮影日時の解決ロジック（実装済み）
+
+写真は EXIF にタイムゾーンがある場合はそれを最優先で採用し、無い場合は `cameraTimezone` をフォールバックとして解釈して UTC を導出します。EXIF が取れない場合は、同一フォルダ内の同名 JPEG/HIF の EXIF を RAW にフォールバック適用し、それでも取れない場合は作成日時・更新日時のうち古い方を参照時刻として採用します。
+
+動画は XML（NonRealTimeMeta）から録画開始時刻とフレーム情報を読み取り、開始時刻と終了時刻を算出します。XML がない場合はファイル時刻にフォールバックします。
+
+### 日時復元の判定基準（実装済み）
+
+写真は作成/更新のうち古い方を参照時刻とし、撮影日時との差が `dateRestoreToleranceSeconds` 秒以内なら元の時刻を維持します。差が許容範囲外なら撮影日時に統一して復元します。
+
+動画は録画開始・終了時刻がそれぞれ作成・更新時刻と許容誤差内なら元の時刻を維持し、ズレている場合は開始・終了時刻に置き換えます。
+
+### EXIF パースの性能（重要）
+
+`exif_reader` のデフォルト設定は詳細解析（MakerNote やサムネイル抽出）まで行うため、1 ファイル数十秒かかることがありました。現在は `readExifFromSource` を **details=false / truncateTags=true** で呼び出すように変更し、実測で 10〜50ms 程度まで改善しています。この設定は実運用性能に直結するため、理由なく元に戻さないでください。
+
+性能検証には `tooling/exif_benchmark.dart` を使います。`test/fixtures/sample_media` の実データを用いて EXIF パース時間を測定できるので、変更時は必ずベンチマークを確認してください。
+
 ### 日時復元
 
 コピー後のファイルに EXIF/XML 由来の撮影日時を反映します。
@@ -157,6 +175,38 @@ EXIF OffsetTimeOriginal → EXIF OffsetTime → cameraTimezone 設定
 
 - **基本**: 取り込み元のファイル名を維持する
 - **重複時**: `{ベース名} (1).{拡張子}`, `{ベース名} (2).{拡張子}`, ...
+
+### 取り込み判定の優先順位（実装済み）
+
+メタデータに記録がある場合は、記録先パスにファイルが存在すればスキップします。記録先が存在しない場合は PC 側で消されたとみなし再取り込みします。メタデータに記録が無い場合は、コピー先に同名ファイルがあるかをチェックし、同一ハッシュならスキップ、異なる場合は重複サフィックスで別名保存します。
+
+### 取り込み中ファイルの扱い
+
+更新日時が現在から 30 秒以内のファイルは書き込み中とみなしスキップします。安全側に倒すため、判定に失敗した場合も書き込み中扱いにします。
+
+### 進捗とログ
+
+スキャン中の進捗は 50 ファイルごとにログ出力されます。ファイル単位の進捗は ImportEngine から通知され、UI 側のプログレス表示に使われます。ログは英語でピリオド終端を厳守します。
+
+### フェイルファスト方針（実装済み）
+
+メタデータ保存の失敗や SD カードの書き込み不可は即中断します。ファイルコピー中の I/O エラーや日時復元の致命的失敗も中断対象です。警告扱いで継続するのは、ファイル単位の軽微な問題（EXIF 読み取り失敗など）に限ります。
+
+### テスト戦略（実装済み）
+
+ユニットテストは `test/` 配下で実施し、`test/fixtures/sample_media` の実データを使います。`sample_media` は Git 管理対象外なので、ローカルに配置されていることが前提です。
+
+E2E では `integration_test/import_flow_test.dart` を実行し、実際のファイルコピー・メタデータ更新・日時復元まで通るかを検証します。MethodChannel を使うため、**macOS / Windows 実機でのみ**成立します。コマンドは `flutter test integration_test` です。
+
+### EXIF ベンチマーク手順（重要）
+
+`tooling/exif_benchmark.dart` を実行すると、実ファイルで EXIF 解析時間を測定できます。
+
+```
+dart run tooling/exif_benchmark.dart
+```
+
+EXIF 周りのコードを変更した場合は必ずベンチを取り、パースが数十 ms 程度であることを確認してください。
 
 ---
 
@@ -285,6 +335,9 @@ flutter test test/services/sony_filesystem_test.dart
 
 # 特定テスト
 flutter test --name "should validate valid Sony SD card structure"
+
+# integration_test（ネイティブ MethodChannel を含む）
+flutter test integration_test
 ```
 
 ---

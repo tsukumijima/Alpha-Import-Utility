@@ -124,10 +124,15 @@ Future<void> createMockSdCardStructure(
 ///
 /// [includeProxy] が true の場合は SUB にプロキシー動画も配置する。
 /// [copiesPerFile] を指定すると、同じファイルを別名で複製して配置する。
+/// 種別ごとの水増し数を指定したい場合は [photoCopiesPerFile] などを使用する。
 Future<void> createSdCardFromSampleMedia(
   String rootPath, {
   bool includeProxy = true,
   int copiesPerFile = 1,
+  int? photoCopiesPerFile,
+  int? videoCopiesPerFile,
+  int? proxyCopiesPerFile,
+  int? xmlCopiesPerFile,
 }) async {
   final sampleDir = Directory(p.join('test', 'fixtures', 'sample_media'));
   if (!sampleDir.existsSync()) {
@@ -149,19 +154,24 @@ Future<void> createSdCardFromSampleMedia(
     final extension = p.extension(file.path).toLowerCase();
 
     String? targetDir;
+    var copyCount = copiesPerFile;
     if (extension == '.jpg' ||
         extension == '.jpeg' ||
         extension == '.arw' ||
         extension == '.hif' ||
         extension == '.heif') {
       targetDir = dcimPath;
+      copyCount = photoCopiesPerFile ?? copiesPerFile;
     } else if (extension == '.xml') {
       targetDir = clipPath;
+      copyCount = xmlCopiesPerFile ?? copiesPerFile;
     } else if (extension == '.mp4') {
       if (fileName.toUpperCase().contains('S03') && includeProxy) {
         targetDir = subPath;
+        copyCount = proxyCopiesPerFile ?? copiesPerFile;
       } else {
         targetDir = clipPath;
+        copyCount = videoCopiesPerFile ?? copiesPerFile;
       }
     }
 
@@ -170,7 +180,7 @@ Future<void> createSdCardFromSampleMedia(
     }
 
     await Directory(targetDir).create(recursive: true);
-    for (var copyIndex = 0; copyIndex < copiesPerFile; copyIndex++) {
+    for (var copyIndex = 0; copyIndex < copyCount; copyIndex++) {
       final copyName = copyIndex == 0
           ? fileName
           : '${p.basenameWithoutExtension(fileName)}_copy$copyIndex${p.extension(fileName)}';

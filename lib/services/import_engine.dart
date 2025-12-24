@@ -83,9 +83,13 @@ class ImportEngine {
     int successCount = 0;
     int skippedCount = 0;
     int errorCount = 0;
+    final phaseStopwatch = Stopwatch();
 
     try {
       // Phase 1: SD カード構造の検証
+      phaseStopwatch
+        ..reset()
+        ..start();
       _log.debug('Phase 1: Validating SD card structure.', tag: 'ImportEngine');
       _notifyProgress(ImportProgress.initial());
 
@@ -97,7 +101,15 @@ class ImportEngine {
         );
       }
 
+      _log.debug(
+        'Phase 1 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
+        tag: 'ImportEngine',
+      );
+
       // Phase 2: 書き込み可能性の確認
+      phaseStopwatch
+        ..reset()
+        ..start();
       _log.debug('Phase 2: Checking write permission.', tag: 'ImportEngine');
       final isWritable = await _metadataManager.isWritable();
       if (!isWritable) {
@@ -107,7 +119,15 @@ class ImportEngine {
         );
       }
 
+      _log.debug(
+        'Phase 2 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
+        tag: 'ImportEngine',
+      );
+
       // Phase 3: 対象ファイルのスキャン
+      phaseStopwatch
+        ..reset()
+        ..start();
       _log.debug('Phase 3: Scanning media files.', tag: 'ImportEngine');
       final scanResult = await _sonyFs.scanMediaFiles(settings);
       final mediaFiles = scanResult.mediaFiles;
@@ -119,14 +139,28 @@ class ImportEngine {
         }
         return a.relativePath.compareTo(b.relativePath);
       });
-      _log.debug('Sorted media files by capture datetime.', tag: 'ImportEngine');
+      _log.debug(
+        'Sorted media files by capture datetime.',
+        tag: 'ImportEngine',
+      );
       _log.info('Found ${mediaFiles.length} media files in SD card.', tag: 'ImportEngine');
+      _log.debug(
+        'Phase 3 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
+        tag: 'ImportEngine',
+      );
 
       // Phase 4: 取り込み対象の確定
+      phaseStopwatch
+        ..reset()
+        ..start();
       _log.debug('Phase 4: Determining import targets.', tag: 'ImportEngine');
       final plan = await _buildImportTargets(mediaFiles, warnings);
       final importTargets = plan.targets;
       skippedCount += plan.skippedCount;
+      _log.debug(
+        'Phase 4 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
+        tag: 'ImportEngine',
+      );
 
       _log.logImportStarted(sdCardRoot, importTargets.length);
 
