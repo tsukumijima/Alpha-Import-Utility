@@ -598,7 +598,7 @@ class ImportProgress {
       currentFileProgress: 0.0,
       currentFileCopiedBytes: 0,
       currentFileTotalBytes: file.fileSize,
-      phase: 'コピー中',
+      phase: 'コピー中...',
       scanCurrentPath: null,
     );
   }

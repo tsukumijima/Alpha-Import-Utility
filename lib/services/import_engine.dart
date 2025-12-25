@@ -132,7 +132,7 @@ class ImportEngine {
       var progress = ImportProgress(
         processedCount: 0,
         totalCount: importTargets.length,
-        phase: 'Importing...',
+        phase: '取り込み中...',
       );
       _notifyProgress(progress);
 
