@@ -381,6 +381,62 @@ class ImportResult {
   }
 }
 
+/// 取り込み予定のファイルを表すクラス
+class ImportPlanItem {
+  /// 対象ファイル
+  final MediaFile file;
+
+  /// 取り込み元の相対パス
+  final String sourcePath;
+
+  /// 取り込み先のフルパス
+  final String destinationPath;
+
+  /// 取り込み先のファイル名
+  final String destinationFileName;
+
+  /// 取り込み先のフォルダパス
+  final String destinationFolder;
+
+  ImportPlanItem({
+    required this.file,
+    required this.sourcePath,
+    required this.destinationPath,
+    required this.destinationFileName,
+    required this.destinationFolder,
+  });
+
+  /// 別名保存が予定されているか
+  bool get isRenamed => destinationFileName != file.fileName;
+}
+
+/// 取り込み前のプランを表すクラス
+///
+/// スキャン結果と取り込み対象の一覧を保持する。
+class ImportPlan {
+  /// 取り込み対象の一覧
+  final List<ImportPlanItem> items;
+
+  /// 取り込み対象の合計サイズ
+  final int totalSize;
+
+  /// スキップされたファイル数
+  final int skippedCount;
+
+  /// 準備段階で発生した警告
+  final List<ImportWarning> warnings;
+
+  ImportPlan({
+    required this.items,
+    required this.totalSize,
+    required this.skippedCount,
+    required this.warnings,
+  });
+
+  /// 取り込み対象の数
+  int get targetCount => items.length;
+}
+
 /// 取り込み進捗の状態
 class ImportProgress {
   /// 現在処理中のファイル
@@ -419,6 +475,17 @@ class ImportProgress {
     return ImportProgress(processedCount: 0, totalCount: 0, phase: 'スキャン中...');
   }
 
+  /// スキャン中の進捗を作成
+  factory ImportProgress.scanning({
+    int processedCount = 0,
+  }) {
+    return ImportProgress(
+      processedCount: processedCount,
+      totalCount: 0,
+      phase: 'スキャン中...',
+    );
+  }
+
   /// 全体の進捗率（0.0 〜 1.0）
   double get overallProgress {
     if (totalCount == 0) return 0.0;
@@ -427,7 +494,9 @@ class ImportProgress {
 
   /// 進捗テキスト（例: '15 / 128 枚'）
   String get progressText {
-    if (totalCount == 0) return 'スキャン中...';
+    if (totalCount == 0) {
+      return processedCount > 0 ? 'スキャン中（$processedCount 件）' : 'スキャン中...';
+    }
     return '$processedCount / $totalCount 枚';
   }
 

@@ -146,6 +146,11 @@ class ImportSettings {
   /// 日付の区切り文字
   final DateSeparator dateSeparator;
 
+  /// 取り込み前のプレビューを表示するか
+  ///
+  /// スキャン完了後に取り込み対象の一覧を表示し、続行するか確認する。
+  final bool isShowImportPreview;
+
   /// EXIF からファイル日時を復元するか
   ///
   /// true の場合、コピー後のファイルの作成日時・更新日時を EXIF の撮影日時に合わせる。
@@ -179,6 +184,7 @@ class ImportSettings {
     this.subfolderPattern = SubfolderPattern.DateOnly,
     this.dateFormat = DateFormatStyle.YYYYMMDD,
     this.dateSeparator = DateSeparator.Underscore,
+    this.isShowImportPreview = false,
     this.isRestoreDateTimeFromExif = true,
     this.dateRestoreToleranceSeconds = 30,
     this.cameraTimezone = 'Asia/Tokyo',
@@ -205,6 +211,7 @@ class ImportSettings {
     SubfolderPattern? subfolderPattern,
     DateFormatStyle? dateFormat,
     DateSeparator? dateSeparator,
+    bool? isShowImportPreview,
     bool? isRestoreDateTimeFromExif,
     int? dateRestoreToleranceSeconds,
     String? cameraTimezone,
@@ -216,6 +223,7 @@ class ImportSettings {
       subfolderPattern: subfolderPattern ?? this.subfolderPattern,
       dateFormat: dateFormat ?? this.dateFormat,
       dateSeparator: dateSeparator ?? this.dateSeparator,
+      isShowImportPreview: isShowImportPreview ?? this.isShowImportPreview,
       isRestoreDateTimeFromExif: isRestoreDateTimeFromExif ?? this.isRestoreDateTimeFromExif,
       dateRestoreToleranceSeconds: dateRestoreToleranceSeconds ?? this.dateRestoreToleranceSeconds,
       cameraTimezone: cameraTimezone ?? this.cameraTimezone,

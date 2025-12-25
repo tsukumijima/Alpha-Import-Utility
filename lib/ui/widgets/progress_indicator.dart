@@ -40,6 +40,8 @@ class ImportProgressIndicator extends StatelessWidget {
 
   /// 全体進捗を構築
   Widget _buildOverallProgress(BuildContext context, ThemeData theme) {
+    final isIndeterminate = progress.totalCount == 0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -67,7 +69,7 @@ class ImportProgressIndicator extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
-            value: progress.overallProgress,
+            value: isIndeterminate ? null : progress.overallProgress,
             minHeight: 8,
           ),
         ),
@@ -76,7 +78,7 @@ class ImportProgressIndicator extends StatelessWidget {
 
         // パーセント表示
         Text(
-          '${(progress.overallProgress * 100).toStringAsFixed(1)}%',
+          isIndeterminate ? '---' : '${(progress.overallProgress * 100).toStringAsFixed(1)}%',
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
         ),
       ],

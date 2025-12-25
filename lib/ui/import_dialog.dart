@@ -13,6 +13,13 @@ import '../services/device_detector.dart';
 import '../services/import_engine.dart';
 import 'widgets/progress_indicator.dart';
 
+enum _ImportDialogPhase {
+  preparing,
+  preview,
+  importing,
+  completed,
+}
+
 /// 取り込みダイアログウィジェット
 class ImportDialog extends StatefulWidget {
   /// 取り込み元デバイス
@@ -38,23 +45,29 @@ class _ImportDialogState extends State<ImportDialog> {
   /// 現在の進捗
   ImportProgress _progress = ImportProgress.initial();
 
+  /// 取り込みプラン
+  ImportPlan? _plan;
+
   /// 取り込み結果（完了時のみ）
   ImportResult? _result;
 
-  /// 取り込み中フラグ
-  bool _isImporting = true;
+  /// ダイアログの状態
+  _ImportDialogPhase _phase = _ImportDialogPhase.preparing;
 
   /// キャンセル確認中フラグ
   bool _isCancelConfirming = false;
 
+  /// 準備完了後にキャンセルするか
+  bool _shouldCancelAfterPreparation = false;
+
   @override
   void initState() {
     super.initState();
-    _startImport();
+    _initializeImportFlow();
   }
 
-  /// 取り込みを開始
-  Future<void> _startImport() async {
+  /// 取り込みフローを初期化
+  Future<void> _initializeImportFlow() async {
     _engine = ImportEngine(
       sdCardRoot: widget.device.mountPoint,
       settings: widget.settings,
@@ -66,12 +79,77 @@ class _ImportDialogState extends State<ImportDialog> {
       }
     };
 
-    final result = await _engine!.execute();
+    if (widget.settings.isShowImportPreview) {
+      await _prepareImportPlan();
+      return;
+    }
+
+    await _startImport();
+  }
+
+  /// 取り込みプランを準備
+  Future<void> _prepareImportPlan() async {
+    setState(() => _phase = _ImportDialogPhase.preparing);
+
+    try {
+      final plan = await _engine!.prepareImportPlan();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (_shouldCancelAfterPreparation) {
+        Navigator.pop(context);
+        return;
+      }
+
+      if (plan.items.isEmpty) {
+        setState(() {
+          _result = ImportResult(
+            successCount: 0,
+            skippedCount: plan.skippedCount,
+            warningCount: plan.warnings.length,
+            errorCount: 0,
+            warnings: plan.warnings,
+            importedFiles: [],
+            duration: Duration.zero,
+          );
+          _phase = _ImportDialogPhase.completed;
+        });
+        return;
+      }
+
+      setState(() {
+        _plan = plan;
+        _phase = _ImportDialogPhase.preview;
+      });
+    } catch (ex) {
+      if (_shouldCancelAfterPreparation && mounted) {
+        Navigator.pop(context);
+        return;
+      }
+      final errorMessage = _engine?.resolveFatalErrorMessage(ex) ?? '取り込み中にエラーが発生したため中断しました。';
+      if (mounted) {
+        setState(() {
+          _result = ImportResult.error(errorMessage: errorMessage);
+          _phase = _ImportDialogPhase.completed;
+        });
+      }
+    }
+  }
+
+  /// 取り込みを開始
+  Future<void> _startImport({
+    ImportPlan? plan,
+  }) async {
+    setState(() => _phase = _ImportDialogPhase.importing);
+
+    final result = await _engine!.execute(plan: plan);
 
     if (mounted) {
       setState(() {
         _result = result;
-        _isImporting = false;
+        _phase = _ImportDialogPhase.completed;
       });
     }
   }
@@ -84,7 +162,7 @@ class _ImportDialogState extends State<ImportDialog> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('取り込みをキャンセルしますか？'),
-        content: const Text('現在コピー中のファイルが完了してから停止します。'),
+        content: Text(_getCancelMessage()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -99,7 +177,15 @@ class _ImportDialogState extends State<ImportDialog> {
     );
 
     if (shouldCancel == true) {
-      _engine?.cancel();
+      if (_phase == _ImportDialogPhase.importing) {
+        _engine?.cancel();
+      } else if (_phase == _ImportDialogPhase.preparing) {
+        _shouldCancelAfterPreparation = true;
+      } else if (_phase == _ImportDialogPhase.preview) {
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      }
     }
 
     if (mounted) {
@@ -124,9 +210,9 @@ class _ImportDialogState extends State<ImportDialog> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !_isImporting,
+      canPop: _phase == _ImportDialogPhase.completed,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _isImporting) {
+        if (!didPop && _phase != _ImportDialogPhase.completed) {
           _requestCancel();
         }
       },
@@ -134,22 +220,46 @@ class _ImportDialogState extends State<ImportDialog> {
         title: Text(_getDialogTitle()),
         content: SizedBox(
           width: 500,
-          child: _isImporting ? _buildProgress() : _buildResult(),
+          child: _buildContentByPhase(),
         ),
-        actions: _isImporting ? _buildImportingActions() : _buildCompletedActions(),
+        actions: _buildActionsByPhase(),
       ),
     );
   }
 
+  /// フェーズ別の内容を構築
+  Widget _buildContentByPhase() {
+    if (_phase == _ImportDialogPhase.preview) {
+      return _buildPreview();
+    }
+    if (_phase == _ImportDialogPhase.completed) {
+      return _buildResult();
+    }
+    return _buildProgress();
+  }
+
+  /// フェーズ別のアクションを構築
+  List<Widget> _buildActionsByPhase() {
+    if (_phase == _ImportDialogPhase.preview) {
+      return _buildPreviewActions();
+    }
+    if (_phase == _ImportDialogPhase.completed) {
+      return _buildCompletedActions();
+    }
+    return _buildImportingActions();
+  }
+
   /// 進捗表示を構築
   Widget _buildProgress() {
+    final statusText = _progress.totalCount == 0 ? 'スキャン中' : '取り込み中';
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // デバイス情報
         Text(
-          '${widget.device.displayName} から取り込み中',
+          '${widget.device.displayName} から$statusText',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Colors.white70,
           ),
@@ -204,7 +314,13 @@ class _ImportDialogState extends State<ImportDialog> {
 
   /// ダイアログタイトルを取得
   String _getDialogTitle() {
-    if (_isImporting) {
+    if (_phase == _ImportDialogPhase.preparing) {
+      return 'スキャン中...';
+    }
+    if (_phase == _ImportDialogPhase.preview) {
+      return '取り込み前プレビュー';
+    }
+    if (_phase == _ImportDialogPhase.importing) {
       return '取り込み中...';
     }
     if (_result?.wasCancelled == true) {
@@ -214,6 +330,72 @@ class _ImportDialogState extends State<ImportDialog> {
       return '取り込み中断';
     }
     return '取り込み完了';
+  }
+
+  /// キャンセル確認メッセージを取得
+  String _getCancelMessage() {
+    if (_phase == _ImportDialogPhase.preparing) {
+      return 'スキャンが完了した時点で取り込みを中止します。';
+    }
+    if (_phase == _ImportDialogPhase.preview) {
+      return '取り込みを開始せずにプレビューを閉じます。';
+    }
+    return '現在コピー中のファイルが完了してから停止します。';
+  }
+
+  /// プレビュー画面を構築
+  Widget _buildPreview() {
+    if (_plan == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final theme = Theme.of(context);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${widget.device.displayName} の取り込み対象',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: Colors.white70,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '取り込み対象: ${_plan!.items.length} 件',
+          style: theme.textTheme.bodySmall?.copyWith(color: Colors.white54),
+        ),
+        const SizedBox(height: 16),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 300),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: _plan!.items.length,
+            separatorBuilder: (context, index) => const Divider(height: 16),
+            itemBuilder: (context, index) => _buildPreviewItem(theme, _plan!.items[index]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// プレビューの各項目を構築
+  Widget _buildPreviewItem(ThemeData theme, ImportPlanItem item) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '元: ${item.sourcePath}',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '先: ${item.destinationPath}',
+          style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+        ),
+      ],
+    );
   }
 
   /// 警告一覧を構築
@@ -265,6 +447,20 @@ class _ImportDialogState extends State<ImportDialog> {
       ElevatedButton(
         onPressed: () => Navigator.pop(context),
         child: const Text('閉じる'),
+      ),
+    ];
+  }
+
+  /// プレビュー時のアクションボタン
+  List<Widget> _buildPreviewActions() {
+    return [
+      TextButton(
+        onPressed: _isCancelConfirming ? null : _requestCancel,
+        child: const Text('キャンセル'),
+      ),
+      ElevatedButton(
+        onPressed: () => _startImport(plan: _plan),
+        child: const Text('続行'),
       ),
     ];
   }

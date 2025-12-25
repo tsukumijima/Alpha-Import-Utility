@@ -188,6 +188,27 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
 
           // プレビュー
           _buildPreview(theme),
+
+          const SizedBox(height: 28),
+
+          // 取り込み前プレビュー
+          _buildSectionTitle(theme, '取り込み前プレビュー'),
+          const SizedBox(height: 6),
+          Text(
+            'スキャン完了後に取り込み対象の一覧を表示し、続行するか確認します。',
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+          ),
+          const SizedBox(height: 6),
+          SwitchListTile(
+            title: const Text('取り込み前にプレビューを表示'),
+            value: _settings.isShowImportPreview,
+            contentPadding: EdgeInsets.zero,
+            onChanged: (value) {
+              setState(() {
+                _settings = _settings.copyWith(isShowImportPreview: value);
+              });
+            },
+          ),
         ],
       ),
     );

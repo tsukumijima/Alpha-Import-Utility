@@ -301,13 +301,17 @@ class SonyFilesystemService {
   /// 取り込み対象のメディアファイルをスキャンする
   ///
   /// [settings] に従って取り込み対象ファイルを列挙する。
+  /// [onProgress] が指定されている場合、スキャン済み件数を通知する。
   /// ファイルはスキャン順序に従ってソートされる:
   /// 1. DCIM/100MSDCF/ → DCIM/101MSDCF/ → ...（番号順）
   /// 2. PRIVATE/M4ROOT/CLIP/
   /// 3. PRIVATE/M4ROOT/SUB/（設定で有効な場合のみ）
   ///
   /// 各フォルダ内はファイル名でソートされる。
-  Future<SonyFilesystemScanResult> scanMediaFiles(ImportSettings settings) async {
+  Future<SonyFilesystemScanResult> scanMediaFiles(
+    ImportSettings settings, {
+    void Function(int processedCount)? onProgress,
+  }) async {
     final validation = await validate();
     if (!validation.isValid) {
       throw Exception('Invalid Sony SD card structure: ${validation.errorMessage}');
@@ -315,6 +319,14 @@ class SonyFilesystemService {
 
     final mediaFiles = <MediaFile>[];
     final warnings = <ImportWarning>[];
+    var processedCount = 0;
+
+    void notifyProgress() {
+      processedCount += 1;
+      if (onProgress != null) {
+        onProgress(processedCount);
+      }
+    }
 
     // 1. DCIM フォルダ内の静止画をスキャン
     final photoFiles = <MediaFile>[];
@@ -324,6 +336,7 @@ class SonyFilesystemService {
         warnings,
         cameraTimezone: settings.cameraTimezone,
         restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+        onFileScanned: notifyProgress,
       );
       photoFiles.addAll(photos);
     }
@@ -345,6 +358,7 @@ class SonyFilesystemService {
         warnings: warnings,
         cameraTimezone: settings.cameraTimezone,
         restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+        onFileScanned: notifyProgress,
       );
       mediaFiles.addAll(videos);
     }
@@ -360,6 +374,7 @@ class SonyFilesystemService {
           warnings: warnings,
           cameraTimezone: settings.cameraTimezone,
           restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+          onFileScanned: notifyProgress,
         );
         mediaFiles.addAll(proxyVideos);
       }
@@ -670,6 +685,7 @@ class SonyFilesystemService {
     List<ImportWarning> warnings, {
     required String cameraTimezone,
     required int restoreToleranceSeconds,
+    void Function()? onFileScanned,
   }) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
@@ -718,6 +734,9 @@ class SonyFilesystemService {
           }
 
           processedCount += 1;
+          if (onFileScanned != null) {
+            onFileScanned();
+          }
           if (processedCount % progressLogInterval == 0) {
             _log.debug(
               'Photo scan progress: $processedCount/${entities.length} in $folderPath (last: $fileName).',
@@ -751,6 +770,7 @@ class SonyFilesystemService {
     required List<ImportWarning> warnings,
     required String cameraTimezone,
     required int restoreToleranceSeconds,
+    void Function()? onFileScanned,
   }) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
@@ -813,6 +833,9 @@ class SonyFilesystemService {
           }
 
           processedCount += 1;
+          if (onFileScanned != null) {
+            onFileScanned();
+          }
           if (processedCount % progressLogInterval == 0) {
             _log.debug(
               'Video scan progress: $processedCount/${entities.length} in $folderPath (last: $fileName).',

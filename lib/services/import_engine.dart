@@ -76,92 +76,22 @@ class ImportEngine {
   /// 4. 容量チェック
   /// 5. 各ファイルの取り込み処理
   /// 6. 結果の返却
-  Future<ImportResult> execute() async {
+  Future<ImportResult> execute({
+    ImportPlan? plan,
+  }) async {
     final stopwatch = Stopwatch()..start();
     final warnings = <ImportWarning>[];
     final importedFiles = <ImportedFileRecord>[];
     int successCount = 0;
     int skippedCount = 0;
     int errorCount = 0;
-    final phaseStopwatch = Stopwatch();
 
     try {
-      // Phase 1: SD カード構造の検証
-      phaseStopwatch
-        ..reset()
-        ..start();
-      _log.debug('Phase 1: Validating SD card structure.', tag: 'ImportEngine');
-      _notifyProgress(ImportProgress.initial());
+      final importPlan = plan ?? await prepareImportPlan();
+      warnings.addAll(importPlan.warnings);
+      skippedCount += importPlan.skippedCount;
 
-      final validation = await _sonyFs.validate();
-      if (!validation.isValid) {
-        _log.error('SD card validation failed: ${validation.errorMessage}', tag: 'ImportEngine');
-        return ImportResult.error(
-          errorMessage: 'Sony SD card structure validation failed: ${validation.errorMessage}',
-        );
-      }
-
-      _log.debug(
-        'Phase 1 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
-        tag: 'ImportEngine',
-      );
-
-      // Phase 2: 書き込み可能性の確認
-      phaseStopwatch
-        ..reset()
-        ..start();
-      _log.debug('Phase 2: Checking write permission.', tag: 'ImportEngine');
-      final isWritable = await _metadataManager.isWritable();
-      if (!isWritable) {
-        _log.error('SD card is not writable.', tag: 'ImportEngine');
-        return ImportResult.error(
-          errorMessage: 'SD card is not writable. Cannot save import metadata.',
-        );
-      }
-
-      _log.debug(
-        'Phase 2 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
-        tag: 'ImportEngine',
-      );
-
-      // Phase 3: 対象ファイルのスキャン
-      phaseStopwatch
-        ..reset()
-        ..start();
-      _log.debug('Phase 3: Scanning media files.', tag: 'ImportEngine');
-      final scanResult = await _sonyFs.scanMediaFiles(settings);
-      final mediaFiles = scanResult.mediaFiles;
-      warnings.addAll(scanResult.warnings);
-      mediaFiles.sort((a, b) {
-        final dateCompare = a.effectiveDateTimeLocal.compareTo(b.effectiveDateTimeLocal);
-        if (dateCompare != 0) {
-          return dateCompare;
-        }
-        return a.relativePath.compareTo(b.relativePath);
-      });
-      _log.debug(
-        'Sorted media files by capture datetime.',
-        tag: 'ImportEngine',
-      );
-      _log.info('Found ${mediaFiles.length} media files in SD card.', tag: 'ImportEngine');
-      _log.debug(
-        'Phase 3 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
-        tag: 'ImportEngine',
-      );
-
-      // Phase 4: 取り込み対象の確定
-      phaseStopwatch
-        ..reset()
-        ..start();
-      _log.debug('Phase 4: Determining import targets.', tag: 'ImportEngine');
-      final plan = await _buildImportTargets(mediaFiles, warnings);
-      final importTargets = plan.targets;
-      skippedCount += plan.skippedCount;
-      _log.debug(
-        'Phase 4 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
-        tag: 'ImportEngine',
-      );
-
+      final importTargets = importPlan.items;
       _log.logImportStarted(sdCardRoot, importTargets.length);
 
       if (importTargets.isEmpty) {
@@ -179,7 +109,7 @@ class ImportEngine {
 
       // Phase 5: 容量チェック
       _log.debug('Phase 5: Checking disk space.', tag: 'ImportEngine');
-      final totalSize = plan.totalSize;
+      final totalSize = importPlan.totalSize;
       final availableSpace = await getAvailableDiskSpace(settings.destinationFolder);
       _log.debug(
         'Required: ${formatFileSize(totalSize)}, Available: ${availableSpace != null ? formatFileSize(availableSpace) : "unknown"}.',
@@ -206,7 +136,9 @@ class ImportEngine {
       );
       _notifyProgress(progress);
 
-      for (final mediaFile in importTargets) {
+      for (final planItem in importTargets) {
+        final mediaFile = planItem.file;
+
         // キャンセルチェック
         if (_isCancelled) {
           return ImportResult.cancelled(
@@ -224,7 +156,7 @@ class ImportEngine {
 
         // 取り込み判定と処理
         final result = await _processFile(
-          mediaFile,
+          planItem,
           warnings,
           onCopyProgress: (bytesCopied) {
             progress = progress.updateFileProgress(bytesCopied);
@@ -291,7 +223,7 @@ class ImportEngine {
     } catch (ex, stackTrace) {
       stopwatch.stop();
       _log.error('Import failed.', tag: 'ImportEngine', error: ex, stackTrace: stackTrace);
-      final errorMessage = _resolveFatalErrorMessage(ex);
+      final errorMessage = resolveFatalErrorMessage(ex);
       return ImportResult.error(
         errorMessage: errorMessage,
         successCount: successCount,
@@ -301,6 +233,104 @@ class ImportEngine {
         duration: stopwatch.elapsed,
       );
     }
+  }
+
+  /// 取り込みプランを準備する
+  ///
+  /// スキャンと取り込み対象の確定までを実行し、プランを返す。
+  Future<ImportPlan> prepareImportPlan() async {
+    final warnings = <ImportWarning>[];
+    final phaseStopwatch = Stopwatch();
+
+    // Phase 1: SD カード構造の検証
+    phaseStopwatch
+      ..reset()
+      ..start();
+    _log.debug('Phase 1: Validating SD card structure.', tag: 'ImportEngine');
+    _notifyProgress(ImportProgress.scanning());
+
+    final validation = await _sonyFs.validate();
+    if (!validation.isValid) {
+      _log.error('SD card validation failed: ${validation.errorMessage}', tag: 'ImportEngine');
+      throw ImportFatalException(
+        'Sony SD card structure validation failed: ${validation.errorMessage}',
+      );
+    }
+
+    _log.debug(
+      'Phase 1 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
+      tag: 'ImportEngine',
+    );
+
+    // Phase 2: 書き込み可能性の確認
+    phaseStopwatch
+      ..reset()
+      ..start();
+    _log.debug('Phase 2: Checking write permission.', tag: 'ImportEngine');
+    final isWritable = await _metadataManager.isWritable();
+    if (!isWritable) {
+      _log.error('SD card is not writable.', tag: 'ImportEngine');
+      throw ImportFatalException(
+        'SD card is not writable. Cannot save import metadata.',
+      );
+    }
+
+    _log.debug(
+      'Phase 2 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
+      tag: 'ImportEngine',
+    );
+
+    // Phase 3: 対象ファイルのスキャン
+    phaseStopwatch
+      ..reset()
+      ..start();
+    _log.debug('Phase 3: Scanning media files.', tag: 'ImportEngine');
+    var scanProgress = ImportProgress.scanning();
+    _notifyProgress(scanProgress);
+
+    final scanResult = await _sonyFs.scanMediaFiles(
+      settings,
+      onProgress: (processedCount) {
+        scanProgress = ImportProgress.scanning(processedCount: processedCount);
+        _notifyProgress(scanProgress);
+      },
+    );
+    final mediaFiles = scanResult.mediaFiles;
+    warnings.addAll(scanResult.warnings);
+    mediaFiles.sort((a, b) {
+      final dateCompare = a.effectiveDateTimeLocal.compareTo(b.effectiveDateTimeLocal);
+      if (dateCompare != 0) {
+        return dateCompare;
+      }
+      return a.relativePath.compareTo(b.relativePath);
+    });
+    _log.debug(
+      'Sorted media files by capture datetime.',
+      tag: 'ImportEngine',
+    );
+    _log.info('Found ${mediaFiles.length} media files in SD card.', tag: 'ImportEngine');
+    _log.debug(
+      'Phase 3 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
+      tag: 'ImportEngine',
+    );
+
+    // Phase 4: 取り込み対象の確定
+    phaseStopwatch
+      ..reset()
+      ..start();
+    _log.debug('Phase 4: Determining import targets.', tag: 'ImportEngine');
+    final plan = await _buildImportTargets(mediaFiles, warnings);
+    _log.debug(
+      'Phase 4 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
+      tag: 'ImportEngine',
+    );
+
+    return ImportPlan(
+      items: plan.items,
+      totalSize: plan.totalSize,
+      skippedCount: plan.skippedCount,
+      warnings: warnings,
+    );
   }
 
   /// 最後にコピーしたファイルの保存先パス（メタデータ記録用）
@@ -316,11 +346,11 @@ class ImportEngine {
   /// 取り込み対象のファイルを確定する
   ///
   /// 既に取り込み済みのファイルを除外し、取り込み対象の合計サイズも算出する。
-  Future<({List<MediaFile> targets, int totalSize, int skippedCount})> _buildImportTargets(
+  Future<({List<ImportPlanItem> items, int totalSize, int skippedCount})> _buildImportTargets(
     List<MediaFile> mediaFiles,
     List<ImportWarning> warnings,
   ) async {
-    final targets = <MediaFile>[];
+    final items = <ImportPlanItem>[];
     var totalSize = 0;
     var skippedCount = 0;
 
@@ -363,19 +393,35 @@ class ImportEngine {
         }
       }
 
-      targets.add(file);
+      final destinationFolder = _getDestinationFolder(file);
+      final destinationFileName = await _resolvePlannedDestinationFileName(
+        file,
+        destinationFolder,
+      );
+      final destinationPath = p.join(destinationFolder, destinationFileName);
+      items.add(
+        ImportPlanItem(
+          file: file,
+          sourcePath: file.relativePath,
+          destinationPath: destinationPath,
+          destinationFileName: destinationFileName,
+          destinationFolder: destinationFolder,
+        ),
+      );
       totalSize += file.fileSize;
     }
 
-    return (targets: targets, totalSize: totalSize, skippedCount: skippedCount);
+    return (items: items, totalSize: totalSize, skippedCount: skippedCount);
   }
 
   /// 単一ファイルの取り込み処理
   Future<_FileProcessResult> _processFile(
-    MediaFile file,
+    ImportPlanItem planItem,
     List<ImportWarning> warnings, {
     void Function(int bytesCopied)? onCopyProgress,
   }) async {
+    final file = planItem.file;
+
     try {
       // EXIF/メタデータの読み取り失敗を警告として記録
       if (file.type.isPhoto && !file.isExifDateTimeValid) {
@@ -410,7 +456,12 @@ class ImportEngine {
       }
 
       // ファイルをコピー
-      await _copyFileWithHash(file, warnings, onCopyProgress: onCopyProgress);
+      await _copyFileWithHash(
+        file,
+        warnings,
+        onCopyProgress: onCopyProgress,
+        plannedFileName: planItem.destinationFileName,
+      );
 
       return _FileProcessResult.imported;
     } on ImportFatalException {
@@ -443,6 +494,19 @@ class ImportEngine {
   String _getDestinationFolder(MediaFile file) {
     final subfolderPath = settings.generateSubfolderPath(file.effectiveDateTimeLocal);
     return p.join(settings.destinationFolder, subfolderPath);
+  }
+
+  /// 取り込み先のファイル名を事前に決定する
+  ///
+  /// 既存ファイルとの重複がある場合はサフィックス付きの名前を返す。
+  Future<String> _resolvePlannedDestinationFileName(
+    MediaFile file,
+    String destinationFolder,
+  ) async {
+    return generateUniqueFileName(
+      Directory(destinationFolder),
+      file.fileName,
+    );
   }
 
   /// 日時復元に使用するターゲット日時を解決
@@ -491,6 +555,7 @@ class ImportEngine {
     MediaFile file,
     List<ImportWarning> warnings, {
     void Function(int bytesCopied)? onCopyProgress,
+    String? plannedFileName,
   }) async {
     final sourceFile = File(file.absolutePath);
     final destFolder = _getDestinationFolder(file);
@@ -499,10 +564,13 @@ class ImportEngine {
     await ensureDirectoryExists(destFolder);
 
     // ファイル名を決定（重複時はサフィックス付与）
-    var destFileName = file.fileName;
+    var destFileName = plannedFileName ?? file.fileName;
 
     // 既存ファイルとの重複チェック
-    destFileName = await generateUniqueFileName(Directory(destFolder), destFileName);
+    final plannedFile = File(p.join(destFolder, destFileName));
+    if (await plannedFile.exists()) {
+      destFileName = await generateUniqueFileName(Directory(destFolder), file.fileName);
+    }
 
     // 元のファイル名と異なる場合は警告を記録
     if (destFileName != file.fileName) {
@@ -623,7 +691,7 @@ class ImportEngine {
   }
 
   /// 中断理由をユーザー向けメッセージに変換する
-  String _resolveFatalErrorMessage(Object ex) {
+  String resolveFatalErrorMessage(Object ex) {
     if (ex is ImportFatalException) {
       return ex.userMessage;
     }
