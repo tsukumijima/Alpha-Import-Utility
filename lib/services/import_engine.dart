@@ -7,6 +7,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 
 import '../models/import_result.dart';
@@ -17,9 +18,6 @@ import '../utils/hash_utils.dart';
 import 'logging_service.dart';
 import 'metadata_manager.dart';
 import 'sony_filesystem.dart';
-
-/// アプリバージョン（メタデータ記録用）
-const String _appVersion = '1.0.0';
 
 /// ハッシュ検証失敗時の最大リトライ回数
 const int _maxCopyRetries = 3;
@@ -50,12 +48,16 @@ class ImportEngine {
   /// 進捗通知コールバック
   void Function(ImportProgress progress)? onProgress;
 
+  /// アプリバージョン（メタデータ記録用）
+  late final Future<String> _appVersionFuture;
+
   ImportEngine({
     required this.sdCardRoot,
     required this.settings,
   }) {
     _sonyFs = SonyFilesystemService(sdCardRoot);
     _metadataManager = MetadataManager(sdCardRoot);
+    _appVersionFuture = _loadAppVersion();
     _log.debug('ImportEngine initialized for $sdCardRoot.', tag: 'ImportEngine');
   }
 
@@ -85,6 +87,7 @@ class ImportEngine {
     int successCount = 0;
     int skippedCount = 0;
     int errorCount = 0;
+    final appVersion = await _appVersionFuture;
 
     try {
       final importPlan = plan ?? await prepareImportPlan();
@@ -130,7 +133,7 @@ class ImportEngine {
         _log.error('Insufficient disk space.', tag: 'ImportEngine');
         return ImportResult.error(
           errorMessage:
-              'Insufficient disk space. Required: ${formatFileSize(totalSize)}, Available: ${formatFileSize(availableSpace)}',
+              '保存先の空き容量が不足しているため取り込みを中断しました。必要: ${formatFileSize(totalSize)}、空き: ${formatFileSize(availableSpace)}。',
         );
       }
 
@@ -216,6 +219,11 @@ class ImportEngine {
             }
             // メタデータに追加
             if (mediaFile.xxHash != null) {
+              if (_lastDestinationPath == null || _lastDestinationPath!.isEmpty) {
+                throw ImportFatalException(
+                  'コピー先パスを確定できないため取り込みを中断しました。',
+                );
+              }
               FileLightweightSignature? signature;
               try {
                 signature = await computeFileLightweightSignature(File(mediaFile.absolutePath));
@@ -234,8 +242,8 @@ class ImportEngine {
                 fileSize: mediaFile.fileSize,
                 lightweightSignature: signature,
                 importedAt: DateTime.now().toUtc(),
-                destinationPath: _lastDestinationPath ?? '',
-                appVersion: _appVersion,
+                destinationPath: _lastDestinationPath!,
+                appVersion: appVersion,
               );
               try {
                 await _metadataManager.addRecord(record);
@@ -454,6 +462,25 @@ class ImportEngine {
     }
   }
 
+  /// アプリバージョンを取得する
+  ///
+  /// 取得に失敗した場合は 'unknown' を返す。
+  Future<String> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (info.version.isNotEmpty) {
+        return info.version;
+      }
+    } catch (ex) {
+      _log.warning(
+        'Failed to load app version, using fallback.',
+        tag: 'ImportEngine',
+        error: ex,
+      );
+    }
+    return 'unknown';
+  }
+
   /// 取り込み対象のファイルを確定する
   ///
   /// 既に取り込み済みのファイルを除外し、取り込み対象の合計サイズも算出する。
@@ -575,6 +602,7 @@ class ImportEngine {
           resolvedCount,
           totalCandidates,
           candidate.file.relativePath,
+          // UI 表示上、英字と日本語の間に半角スペースを入れるため先頭スペースを維持する
           ' EXIF を解析中...',
         );
       }
@@ -756,6 +784,10 @@ class ImportEngine {
     try {
       // EXIF/メタデータの読み取り失敗を警告として記録
       if (file.type.isPhoto && !file.isExifDateTimeValid) {
+        _log.warning(
+          'EXIF datetime missing, using source file time: ${file.relativePath}.',
+          tag: 'ImportEngine',
+        );
         warnings.add(
           ImportWarning(
             type: ImportWarningType.ExifReadFailed,
@@ -764,6 +796,10 @@ class ImportEngine {
           ),
         );
       } else if (file.type == MediaType.Video && file.exifDateTimeLocal == null) {
+        _log.warning(
+          'Video XML datetime missing, using source file time: ${file.relativePath}.',
+          tag: 'ImportEngine',
+        );
         warnings.add(
           ImportWarning(
             type: ImportWarningType.ExifReadFailed,
@@ -787,7 +823,7 @@ class ImportEngine {
       }
 
       // ファイルをコピー
-      await _copyFileWithHash(
+      _lastDestinationPath = await _copyFileWithHash(
         file,
         warnings,
         onCopyProgress: onCopyProgress,
@@ -882,7 +918,7 @@ class ImportEngine {
   }
 
   /// ファイルをコピーしてハッシュを計算
-  Future<void> _copyFileWithHash(
+  Future<String> _copyFileWithHash(
     MediaFile file,
     List<ImportWarning> warnings, {
     void Function(int bytesCopied)? onCopyProgress,
@@ -900,7 +936,7 @@ class ImportEngine {
     // 既存ファイルとの重複チェック
     final plannedFile = File(p.join(destFolder, destFileName));
     if (await plannedFile.exists()) {
-      destFileName = await generateUniqueFileName(Directory(destFolder), file.fileName);
+      destFileName = await generateUniqueFileName(Directory(destFolder), destFileName);
     }
 
     // 元のファイル名と異なる場合は警告を記録
@@ -986,7 +1022,7 @@ class ImportEngine {
 
         // 成功
         _log.logFileCopied(file.relativePath, destPath);
-        return;
+        return _lastDestinationPath!;
       } on ImportFatalException {
         if (await destFile.exists()) {
           try {
@@ -1037,6 +1073,10 @@ class ImportEngine {
         // リトライ
       }
     }
+
+    throw ImportFatalException(
+      'ファイルのコピーに失敗したため取り込みを中断しました。ファイル: ${file.fileName}。',
+    );
   }
 
   /// 空き容量不足のエラーかどうかを判定する

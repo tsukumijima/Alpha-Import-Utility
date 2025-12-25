@@ -19,6 +19,8 @@ const String _metadataTempSuffix = '.tmp';
 const String _metadataLockSuffix = '.lock';
 const int _metadataSaveMaxRetries = 3;
 const Duration _metadataSaveRetryDelay = Duration(milliseconds: 200);
+const Duration _metadataLockWaitTimeout = Duration(seconds: 8);
+const Duration _metadataLockPollInterval = Duration(milliseconds: 200);
 
 /// メタデータ管理サービス
 ///
@@ -121,6 +123,7 @@ class MetadataManager {
         error: ex,
         stackTrace: stackTrace,
       );
+      await _backupCorruptedMetadataFile(file);
       _metadata = ImportMetadata.empty();
       _lastLoadedModified = null;
       _recordBySourcePath = {};
@@ -166,13 +169,8 @@ class MetadataManager {
         // 一時ファイルに書き込み
         await tempFile.writeAsString(jsonString);
 
-        // 既存ファイルがあれば削除
-        if (await file.exists()) {
-          await file.delete();
-        }
-
-        // 一時ファイルをリネーム
-        await tempFile.rename(metadataFilePath);
+        // 一時ファイルを安全に差し替え
+        await _replaceMetadataFile(tempFile, file);
 
         // キャッシュを更新
         _metadata = metadata;
@@ -220,12 +218,17 @@ class MetadataManager {
   /// ロックファイルが消えるまで待機する
   Future<void> _waitForLockRelease() async {
     final lockFile = File(metadataLockFilePath);
-    const maxRetries = 3;
-    var attempt = 0;
+    final stopwatch = Stopwatch()..start();
 
-    while (await lockFile.exists() && attempt < maxRetries) {
-      await Future.delayed(Duration(milliseconds: 200 * (attempt + 1)));
-      attempt++;
+    while (await lockFile.exists()) {
+      if (stopwatch.elapsed >= _metadataLockWaitTimeout) {
+        _log.error(
+          'Lock wait timeout exceeded (${_metadataLockWaitTimeout.inSeconds}s).',
+          tag: 'MetadataManager',
+        );
+        throw Exception('Metadata lock wait timeout.');
+      }
+      await Future.delayed(_metadataLockPollInterval);
     }
   }
 
@@ -238,14 +241,31 @@ class MetadataManager {
       return;
     }
 
-    // メタデータ本体がない場合は一時ファイルを復旧に使用する
-    if (!await file.exists()) {
-      try {
-        await tempFile.rename(metadataFilePath);
-        return;
-      } catch (_) {
-        // 復旧失敗時はクリーンアップに進む
+    // メタデータ本体と一時ファイルの両方がある場合は一時ファイルの妥当性を検証する
+    if (await file.exists()) {
+      final tempMetadata = await _tryParseMetadataFile(tempFile);
+      if (tempMetadata != null) {
+        try {
+          await _replaceMetadataFile(tempFile, file);
+          return;
+        } catch (ex) {
+          _log.error(
+            'Failed to replace metadata with temp file during recovery.',
+            tag: 'MetadataManager',
+            error: ex,
+          );
+        }
       }
+      await _cleanupTempFile();
+      return;
+    }
+
+    // メタデータ本体がない場合は一時ファイルを復旧に使用する
+    try {
+      await _replaceMetadataFile(tempFile, file);
+      return;
+    } catch (_) {
+      // 復旧失敗時はクリーンアップに進む
     }
 
     await _cleanupTempFile();
@@ -261,6 +281,88 @@ class MetadataManager {
         // 削除できない場合は次回の復旧処理に任せる
       }
     }
+  }
+
+  /// 破損したメタデータファイルをバックアップする
+  ///
+  /// パースに失敗したファイルを .corrupted サフィックス付きで退避する。
+  Future<void> _backupCorruptedMetadataFile(File file) async {
+    if (!await file.exists()) {
+      return;
+    }
+
+    final timestamp = _formatTimestamp(DateTime.now());
+    final backupPath = '$metadataFilePath.corrupted-$timestamp';
+    try {
+      await file.rename(backupPath);
+      _log.warning(
+        'Corrupted metadata file was backed up: $backupPath.',
+        tag: 'MetadataManager',
+      );
+    } catch (ex) {
+      _log.error(
+        'Failed to back up corrupted metadata file.',
+        tag: 'MetadataManager',
+        error: ex,
+      );
+    }
+  }
+
+  /// メタデータ一時ファイルを本体に差し替える
+  ///
+  /// Windows では既存ファイルを退避してからリネームする。
+  Future<void> _replaceMetadataFile(
+    File tempFile,
+    File targetFile,
+  ) async {
+    if (Platform.isWindows && await targetFile.exists()) {
+      final backupFile = File('$metadataFilePath.bak');
+      if (await backupFile.exists()) {
+        final rotatedPath = '$metadataFilePath.bak-${_formatTimestamp(DateTime.now())}';
+        try {
+          await backupFile.rename(rotatedPath);
+        } catch (ex) {
+          _log.warning(
+            'Failed to rotate existing metadata backup, deleting it.',
+            tag: 'MetadataManager',
+            error: ex,
+          );
+          await backupFile.delete();
+        }
+      }
+      await targetFile.rename(backupFile.path);
+      try {
+        await tempFile.rename(metadataFilePath);
+        await backupFile.delete();
+      } catch (ex) {
+        if (await backupFile.exists() && !await targetFile.exists()) {
+          await backupFile.rename(metadataFilePath);
+        }
+        rethrow;
+      }
+      return;
+    }
+
+    await tempFile.rename(metadataFilePath);
+  }
+
+  /// メタデータファイルを解析して内容を取得する
+  ///
+  /// 解析に失敗した場合は null を返す。
+  Future<ImportMetadata?> _tryParseMetadataFile(File file) async {
+    try {
+      final content = await file.readAsString();
+      final json = jsonDecode(content) as Map<String, dynamic>;
+      return ImportMetadata.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 日時をバックアップ用の文字列に変換する
+  String _formatTimestamp(DateTime time) {
+    String pad(int value) => value.toString().padLeft(2, '0');
+    return '${time.year}${pad(time.month)}${pad(time.day)}_${pad(time.hour)}${pad(time.minute)}${pad(time.second)}';
   }
 
   /// ロックファイルを削除する

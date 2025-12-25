@@ -315,6 +315,8 @@ try {
 
 ### 編集後の必須コマンド
 
+編集後は Linter と Formatter を必ず実行します。これは任意ではなく、必須の手順です。
+
 ```bash
 # JSON シリアライズコードの再生成（.g.dart ファイル）
 dart run build_runner build --delete-conflicting-outputs

@@ -8,8 +8,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-import '../models/media_file.dart';
 import '../models/import_result.dart';
+import '../models/media_file.dart';
 import '../models/settings.dart';
 import '../utils/exif_utils.dart';
 import '../utils/file_utils.dart';
@@ -231,7 +231,8 @@ class SonyFilesystemService {
       final contents = <String>[];
       await for (final entity in dir.list()) {
         final name = p.basename(entity.path);
-        final type = entity is Directory ? 'dir' : 'file';
+        final isDirectory = await FileSystemEntity.isDirectory(entity.path);
+        final type = isDirectory ? 'dir' : 'file';
         contents.add('$name ($type)');
       }
       return contents;
@@ -259,7 +260,7 @@ class SonyFilesystemService {
 
     try {
       await for (final entity in parentDir.list()) {
-        if (entity is Directory) {
+        if (await FileSystemEntity.isDirectory(entity.path)) {
           final name = p.basename(entity.path);
           if (name.toLowerCase() == targetLower) {
             return entity.path;
@@ -289,7 +290,7 @@ class SonyFilesystemService {
 
     try {
       await for (final entity in dcimDir.list()) {
-        if (entity is Directory) {
+        if (await FileSystemEntity.isDirectory(entity.path)) {
           final name = p.basename(entity.path);
           if (_dcfFolderPattern.hasMatch(name)) {
             folders.add(entity.path);
@@ -427,10 +428,6 @@ class SonyFilesystemService {
     return _findCaseInsensitiveDirectory(m4rootPath, 'SUB');
   }
 
-  /// RAW ファイルの EXIF を JPEG/HIF から補完する
-  ///
-  /// RAW に EXIF が無い場合、同一フォルダ内で同じベース名の JPEG/HIF が
-  /// 持つ EXIF をフォールバックとして適用する。
   /// RAW ファイルの EXIF を JPEG/HIF から補完する
   ///
   /// RAW に EXIF が無い場合、同一フォルダ内で同じベース名の JPEG/HIF が
@@ -658,11 +655,13 @@ class SonyFilesystemService {
       int processedCount = 0;
       const int progressLogInterval = 50;
 
-      await for (final entity in dir.list()) {
+      final entities = await _listDirectoryEntriesSorted(dir);
+      for (final entity in entities) {
         if (isCancelled != null && isCancelled()) {
           throw SonyFilesystemScanCancelled();
         }
-        if (entity is File) {
+        if (await FileSystemEntity.isFile(entity.path)) {
+          final fileEntity = File(entity.path);
           final fileName = p.basename(entity.path);
 
           // OS 生成ファイルをスキップ
@@ -671,7 +670,7 @@ class SonyFilesystemService {
           final ext = getExtension(fileName).toLowerCase();
           if (_photoExtensions.contains(ext)) {
             final mediaFile = await _createMediaFile(
-              entity,
+              fileEntity,
               isProxyFolder: false,
               cameraTimezone: cameraTimezone,
               restoreToleranceSeconds: restoreToleranceSeconds,
@@ -682,7 +681,7 @@ class SonyFilesystemService {
             }
           } else if (ext.isNotEmpty) {
             await _addUnknownExtensionWarning(
-              entity,
+              fileEntity,
               warnings,
               cameraTimezone,
             );
@@ -690,7 +689,7 @@ class SonyFilesystemService {
 
           processedCount += 1;
           if (onFileScanned != null) {
-            onFileScanned(getRelativePath(rootPath, entity.path));
+            onFileScanned(getRelativePath(rootPath, fileEntity.path));
           }
           if (processedCount % progressLogInterval == 0) {
             _log.debug(
@@ -744,11 +743,13 @@ class SonyFilesystemService {
       int processedCount = 0;
       const int progressLogInterval = 50;
 
-      await for (final entity in dir.list()) {
+      final entities = await _listDirectoryEntriesSorted(dir);
+      for (final entity in entities) {
         if (isCancelled != null && isCancelled()) {
           throw SonyFilesystemScanCancelled();
         }
-        if (entity is File) {
+        if (await FileSystemEntity.isFile(entity.path)) {
+          final fileEntity = File(entity.path);
           final fileName = p.basename(entity.path);
 
           // OS 生成ファイルをスキップ
@@ -759,7 +760,7 @@ class SonyFilesystemService {
           // 動画ファイル
           if (_videoExtensions.contains(ext)) {
             final mediaFile = await _createMediaFile(
-              entity,
+              fileEntity,
               isProxyFolder: isProxyFolder,
               cameraTimezone: cameraTimezone,
               restoreToleranceSeconds: restoreToleranceSeconds,
@@ -772,7 +773,7 @@ class SonyFilesystemService {
           // XML ファイル（設定で有効な場合のみ）
           else if (includeXml && _metaExtensions.contains(ext)) {
             final mediaFile = await _createMediaFile(
-              entity,
+              fileEntity,
               isProxyFolder: false,
               cameraTimezone: cameraTimezone,
               restoreToleranceSeconds: restoreToleranceSeconds,
@@ -783,7 +784,7 @@ class SonyFilesystemService {
             }
           } else if (!_metaExtensions.contains(ext) && ext.isNotEmpty) {
             await _addUnknownExtensionWarning(
-              entity,
+              fileEntity,
               warnings,
               cameraTimezone,
             );
@@ -791,7 +792,7 @@ class SonyFilesystemService {
 
           processedCount += 1;
           if (onFileScanned != null) {
-            onFileScanned(getRelativePath(rootPath, entity.path));
+            onFileScanned(getRelativePath(rootPath, fileEntity.path));
           }
           if (processedCount % progressLogInterval == 0) {
             _log.debug(
@@ -816,6 +817,19 @@ class SonyFilesystemService {
     }
 
     return files;
+  }
+
+  /// ディレクトリエントリを名前順に取得する
+  ///
+  /// 大文字小文字を無視してソートし、安定した順序で処理できるようにする。
+  Future<List<FileSystemEntity>> _listDirectoryEntriesSorted(Directory directory) async {
+    final entries = await directory.list().toList();
+    entries.sort((a, b) {
+      final aName = p.basename(a.path).toLowerCase();
+      final bName = p.basename(b.path).toLowerCase();
+      return aName.compareTo(bName);
+    });
+    return entries;
   }
 
   /// 未知の拡張子を警告として追加
