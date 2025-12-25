@@ -531,6 +531,9 @@ class ImportProgress {
   /// スキャン中の現在ファイルパス
   final String? scanCurrentPath;
 
+  /// コピー中の取り込み先パス（絶対パス）
+  final String? currentDestinationPath;
+
   ImportProgress({
     this.currentFile,
     required this.processedCount,
@@ -540,6 +543,7 @@ class ImportProgress {
     this.currentFileTotalBytes = 0,
     this.phase = '',
     this.scanCurrentPath,
+    this.currentDestinationPath,
   });
 
   /// 初期状態を作成
@@ -590,7 +594,10 @@ class ImportProgress {
   }
 
   /// 新しいファイルの処理を開始
-  ImportProgress startFile(MediaFile file) {
+  ImportProgress startFile(
+    MediaFile file, {
+    String? destinationPath,
+  }) {
     return ImportProgress(
       currentFile: file,
       processedCount: processedCount,
@@ -600,6 +607,7 @@ class ImportProgress {
       currentFileTotalBytes: file.fileSize,
       phase: 'コピー中...',
       scanCurrentPath: null,
+      currentDestinationPath: destinationPath,
     );
   }
 
@@ -615,6 +623,7 @@ class ImportProgress {
       currentFileTotalBytes: currentFileTotalBytes,
       phase: phase,
       scanCurrentPath: null,
+      currentDestinationPath: currentDestinationPath,
     );
   }
 
@@ -629,6 +638,7 @@ class ImportProgress {
       currentFileTotalBytes: 0,
       phase: phase,
       scanCurrentPath: null,
+      currentDestinationPath: null,
     );
   }
 

@@ -95,6 +95,7 @@ class ImportProgressIndicator extends StatelessWidget {
   /// 現在のファイル進捗を構築
   Widget _buildCurrentFileProgress(BuildContext context, ThemeData theme) {
     final file = progress.currentFile!;
+    final destinationPath = progress.currentDestinationPath;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -117,11 +118,20 @@ class ImportProgressIndicator extends StatelessWidget {
 
           // ファイルパス
           Text(
-            file.relativePath,
+            'From: ${file.relativePath}',
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white54),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          if (destinationPath != null && destinationPath.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              'To: $destinationPath',
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.white54),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
 
           const SizedBox(height: 12),
 

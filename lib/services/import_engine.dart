@@ -151,7 +151,10 @@ class ImportEngine {
         }
 
         // 進捗通知
-        progress = progress.startFile(mediaFile);
+        progress = progress.startFile(
+          mediaFile,
+          destinationPath: planItem.destinationPath,
+        );
         _notifyProgress(progress);
 
         // 取り込み判定と処理
@@ -950,6 +953,24 @@ class ImportEngine {
           }
         }
         rethrow;
+      } on FileSystemException catch (ex) {
+        if (await destFile.exists()) {
+          try {
+            await destFile.delete();
+          } catch (_) {
+            // コピー失敗時の残骸削除に失敗しても再試行を優先する
+          }
+        }
+        if (_isNoSpaceError(ex)) {
+          throw ImportFatalException(
+            '保存先の空き容量が不足しているため取り込みを中断しました。ファイル: ${file.fileName}。',
+            debugMessage: ex.toString(),
+          );
+        }
+        if (attempt >= _maxCopyRetries) {
+          rethrow;
+        }
+        // リトライ
       } catch (ex) {
         if (await destFile.exists()) {
           try {
@@ -964,6 +985,16 @@ class ImportEngine {
         // リトライ
       }
     }
+  }
+
+  /// 空き容量不足のエラーかどうかを判定する
+  bool _isNoSpaceError(FileSystemException ex) {
+    final errorCode = ex.osError?.errorCode;
+    if (errorCode == null) {
+      return false;
+    }
+    // macOS/Linux: 28, Windows: 112
+    return errorCode == 28 || errorCode == 112;
   }
 
   /// 中断理由をユーザー向けメッセージに変換する

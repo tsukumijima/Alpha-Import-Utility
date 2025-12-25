@@ -162,6 +162,9 @@ class StreamingCopyWithHash {
       await sink.close();
     }
 
+    // 非同期書き込みエラーを検出するために完了を待機する
+    await sink.done;
+
     return hashState.digestString().padLeft(16, '0');
   }
 }
