@@ -37,6 +37,9 @@ class MetadataManager {
   /// 最後に読み込んだファイルの更新日時（キャッシュ有効性判定用）
   DateTime? _lastLoadedModified;
 
+  /// ソースパスをキーとしたレコード索引
+  Map<String, ImportedFileRecord> _recordBySourcePath = {};
+
   MetadataManager(this.sdCardRoot);
 
   /// メタデータファイルのパスを取得
@@ -77,6 +80,7 @@ class MetadataManager {
       );
       _metadata = ImportMetadata.empty();
       _lastLoadedModified = null;
+      _recordBySourcePath = {};
       return _metadata!;
     }
 
@@ -99,6 +103,9 @@ class MetadataManager {
       final json = jsonDecode(content) as Map<String, dynamic>;
       _metadata = ImportMetadata.fromJson(json);
       _lastLoadedModified = stat.modified;
+      _recordBySourcePath = {
+        for (final record in _metadata!.files) record.sourcePath: record,
+      };
 
       _log.info(
         'Metadata loaded: ${_metadata!.files.length} file records.',
@@ -116,6 +123,7 @@ class MetadataManager {
       );
       _metadata = ImportMetadata.empty();
       _lastLoadedModified = null;
+      _recordBySourcePath = {};
       return _metadata!;
     }
   }
@@ -169,6 +177,9 @@ class MetadataManager {
         // キャッシュを更新
         _metadata = metadata;
         _lastLoadedModified = (await file.stat()).modified;
+        _recordBySourcePath = {
+          for (final record in metadata.files) record.sourcePath: record,
+        };
 
         _log.info(
           'Metadata saved: ${metadata.files.length} file records.',
@@ -297,7 +308,7 @@ class MetadataManager {
   /// 取り込み済みかどうかの判定に使用する。
   Future<ImportedFileRecord?> findRecord(String sourcePath) async {
     final metadata = await load();
-    return metadata.findBySourcePath(sourcePath);
+    return _recordBySourcePath[sourcePath] ?? metadata.findBySourcePath(sourcePath);
   }
 
   /// 指定したソースパスが取り込み済みかどうかを確認
@@ -318,6 +329,7 @@ class MetadataManager {
   void clearCache() {
     _metadata = null;
     _lastLoadedModified = null;
+    _recordBySourcePath = {};
   }
 
   /// SD カードが書き込み可能かどうかをテスト

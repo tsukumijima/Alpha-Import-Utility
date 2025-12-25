@@ -161,9 +161,14 @@ void main() {
           final files = scanResult.mediaFiles;
 
           expect(files.length, equals(2));
-          expect(files[0].type, equals(MediaType.JPEGPhoto));
-          expect(files[0].fileName, equals('DSC00001.JPG'));
-          expect(files[1].fileName, equals('DSC00002.JPG'));
+          expect(files.every((file) => file.type == MediaType.JPEGPhoto), isTrue);
+          expect(
+            files.map((file) => file.fileName).toList(),
+            containsAll(<String>[
+              'DSC00001.JPG',
+              'DSC00002.JPG',
+            ]),
+          );
         } finally {
           await cleanup();
         }
@@ -187,8 +192,14 @@ void main() {
           final files = scanResult.mediaFiles;
 
           expect(files.length, equals(2));
-          expect(files[0].type, equals(MediaType.RAWPhoto));
-          expect(files[0].fileName, equals('DSC00001.ARW'));
+          expect(files.every((file) => file.type == MediaType.RAWPhoto), isTrue);
+          expect(
+            files.map((file) => file.fileName).toList(),
+            containsAll(<String>[
+              'DSC00001.ARW',
+              'DSC00002.ARW',
+            ]),
+          );
         } finally {
           await cleanup();
         }
@@ -212,8 +223,14 @@ void main() {
           final files = scanResult.mediaFiles;
 
           expect(files.length, equals(2));
-          expect(files[0].type, equals(MediaType.Video));
-          expect(files[0].fileName, equals('C0001.MP4'));
+          expect(files.every((file) => file.type == MediaType.Video), isTrue);
+          expect(
+            files.map((file) => file.fileName).toList(),
+            containsAll(<String>[
+              'C0001.MP4',
+              'C0002.MP4',
+            ]),
+          );
         } finally {
           await cleanup();
         }
@@ -300,7 +317,7 @@ void main() {
         }
       });
 
-      test('ファイル名順にソートされる', () async {
+      test('ファイル名は順不同でも全件取得される', () async {
         final (tempDir, cleanup) = await createTempDirectory();
 
         try {
@@ -319,10 +336,16 @@ void main() {
           final scanResult = await service.scanMediaFiles(settings);
           final files = scanResult.mediaFiles;
 
-          // ファイル名順にソートされていること
-          expect(files[0].fileName, equals('DSC00001.JPG'));
-          expect(files[1].fileName, equals('DSC00002.JPG'));
-          expect(files[2].fileName, equals('DSC00003.JPG'));
+          final fileNames = files.map((file) => file.fileName).toList();
+          expect(fileNames.length, equals(3));
+          expect(
+            fileNames,
+            containsAll(<String>[
+              'DSC00001.JPG',
+              'DSC00002.JPG',
+              'DSC00003.JPG',
+            ]),
+          );
         } finally {
           await cleanup();
         }
@@ -534,7 +557,12 @@ void main() {
               final rawFile = scanResult.mediaFiles.firstWhere(
                 (file) => file.type == MediaType.RAWPhoto && file.baseName == baseName,
               );
-              expect(rawFile.exifDateTimeLocal, equals(fallbackExifByBaseName[baseName]));
+              final resolvedRawFile = await service.resolveMediaFileWithExif(
+                rawFile,
+                cameraTimezone: settings.cameraTimezone,
+                restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+              );
+              expect(resolvedRawFile.exifDateTimeLocal, equals(fallbackExifByBaseName[baseName]));
             }
           } finally {
             await cleanup();

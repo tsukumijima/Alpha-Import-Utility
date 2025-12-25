@@ -9,6 +9,8 @@ import 'dart:typed_data';
 
 import 'package:xxh3/xxh3.dart';
 
+import '../models/import_result.dart';
+
 /// ファイルの xxHash64 を計算する
 ///
 /// [file] のハッシュを計算し、16 進数文字列で返す。
@@ -48,6 +50,59 @@ Future<String> computeFileHash(
 String computeDataHash(Uint8List data) {
   final hashValue = xxh3(data);
   return hashValue.toRadixString(16).padLeft(16, '0');
+}
+
+/// ファイルの軽量シグネチャを計算する
+///
+/// ファイルの先頭・中間・末尾のチャンクをハッシュ化し、
+/// 差分判定を高速化するためのシグネチャを生成する。
+Future<FileLightweightSignature> computeFileLightweightSignature(
+  File file, {
+  int chunkSize = 64 * 1024,
+}) async {
+  final fileLength = await file.length();
+  final safeChunkSize = chunkSize <= 0 ? 64 * 1024 : chunkSize;
+
+  final headSize = fileLength < safeChunkSize ? fileLength : safeChunkSize;
+  final middleSize = headSize;
+  final tailSize = headSize;
+
+  final headOffset = 0;
+  final middleOffset = fileLength <= middleSize
+      ? 0
+      : ((fileLength - middleSize) ~/ 2).clamp(0, fileLength - middleSize);
+  final tailOffset = fileLength <= tailSize ? 0 : fileLength - tailSize;
+
+  final raf = await file.open();
+  try {
+    final headData = await _readFileChunk(raf, headOffset, headSize);
+    final middleData = await _readFileChunk(raf, middleOffset, middleSize);
+    final tailData = await _readFileChunk(raf, tailOffset, tailSize);
+
+    return FileLightweightSignature(
+      chunkSize: safeChunkSize,
+      headHash: computeDataHash(headData),
+      middleHash: computeDataHash(middleData),
+      tailHash: computeDataHash(tailData),
+    );
+  } finally {
+    await raf.close();
+  }
+}
+
+/// ファイルの指定位置からチャンクを読み取る
+Future<Uint8List> _readFileChunk(
+  RandomAccessFile raf,
+  int offset,
+  int size,
+) async {
+  if (size <= 0) {
+    return Uint8List(0);
+  }
+
+  await raf.setPosition(offset);
+  final data = await raf.read(size);
+  return data;
 }
 
 /// ストリーミングコピーしながらハッシュを計算するクラス

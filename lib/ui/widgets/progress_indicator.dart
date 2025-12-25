@@ -41,7 +41,7 @@ class ImportProgressIndicator extends StatelessWidget {
   Widget _buildOverallProgress(BuildContext context, ThemeData theme) {
     final isIndeterminate = progress.totalCount == 0;
     final scanPath = progress.scanCurrentPath;
-    final leftLabel = isIndeterminate && scanPath != null && scanPath.isNotEmpty ? scanPath : progress.phase;
+    final leftLabel = scanPath != null && scanPath.isNotEmpty ? scanPath : progress.phase;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

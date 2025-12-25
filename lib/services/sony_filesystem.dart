@@ -355,18 +355,13 @@ class SonyFilesystemService {
         warnings,
         cameraTimezone: settings.cameraTimezone,
         restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+        shouldReadExif: false,
         isCancelled: isCancelled,
         onFileScanned: notifyProgress,
       );
       photoFiles.addAll(photos);
     }
-    mediaFiles.addAll(
-      _applyRawExifFallback(
-        photoFiles,
-        cameraTimezone: settings.cameraTimezone,
-        restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
-      ),
-    );
+    mediaFiles.addAll(photoFiles);
 
     // 2. PRIVATE/M4ROOT/CLIP 内の動画をスキャン
     final clipPath = await _getClipPath();
@@ -378,6 +373,7 @@ class SonyFilesystemService {
         warnings: warnings,
         cameraTimezone: settings.cameraTimezone,
         restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+        shouldReadExif: false,
         isCancelled: isCancelled,
         onFileScanned: notifyProgress,
       );
@@ -395,6 +391,7 @@ class SonyFilesystemService {
           warnings: warnings,
           cameraTimezone: settings.cameraTimezone,
           restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+          shouldReadExif: false,
           isCancelled: isCancelled,
           onFileScanned: notifyProgress,
         );
@@ -434,91 +431,32 @@ class SonyFilesystemService {
   ///
   /// RAW に EXIF が無い場合、同一フォルダ内で同じベース名の JPEG/HIF が
   /// 持つ EXIF をフォールバックとして適用する。
-  List<MediaFile> _applyRawExifFallback(
-    List<MediaFile> photoFiles, {
-    required String cameraTimezone,
-    required int restoreToleranceSeconds,
-  }) {
-    final fallbackByKey = <String, ({DateTime local, int? utcMs, bool hasTimezone})>{};
-
-    for (final file in photoFiles) {
-      if (file.type == MediaType.JPEGPhoto || file.type == MediaType.HEIFPhoto) {
-        if (file.isExifDateTimeValid) {
-          fallbackByKey[_buildBaseNameKey(file)] = (
-            local: file.exifDateTimeLocal!,
-            utcMs: file.exifDateTimeUtcMs,
-            hasTimezone: file.hasExifTimezone,
-          );
-        }
-      }
-    }
-
-    if (fallbackByKey.isEmpty) {
-      return photoFiles;
-    }
-
-    return photoFiles.map((file) {
-      if (file.type == MediaType.RAWPhoto && !file.isExifDateTimeValid) {
-        final fallback = fallbackByKey[_buildBaseNameKey(file)];
-        if (fallback != null) {
-          return _copyMediaFileWithExifDateTime(
-            file,
-            fallback.local,
-            fallback.utcMs,
-            fallback.hasTimezone,
-            cameraTimezone,
-            restoreToleranceSeconds,
-          );
-        }
-      }
-      return file;
-    }).toList();
-  }
-
-  /// EXIF フォールバックを適用した MediaFile を生成する
-  MediaFile _copyMediaFileWithExifDateTime(
-    MediaFile file,
-    DateTime exifDateTimeLocal,
-    int? exifDateTimeUtcMs,
-    bool hasExifTimezone,
+  /// RAW ファイルの EXIF を JPEG/HIF から補完する
+  ///
+  /// RAW に EXIF が無い場合、同一フォルダ内で同じベース名の JPEG/HIF が
+  /// 持つ EXIF をフォールバックとして適用する。
+  Future<({DateTime local, int? utcMs, bool hasTimezone})?> _readRawExifFallback(
+    File rawFile,
     String cameraTimezone,
-    int restoreToleranceSeconds,
-  ) {
-    final referenceUtcMs = _getReferenceUtcMs((
-      creationTimeUtcMs: file.sourceCreatedTimeUtcMs,
-      modifiedTimeUtcMs: file.sourceModifiedTimeUtcMs,
-    ));
-    final resolvedTimes = _resolveCaptureTimes(
-      exifLocalDateTime: exifDateTimeLocal,
-      exifUtcMs: exifDateTimeUtcMs,
-      hasExifTimezone: hasExifTimezone,
-      sourceReferenceUtcMs: referenceUtcMs,
+  ) async {
+    final fallbackFile = await _findRawFallbackFile(rawFile);
+    if (fallbackFile == null) {
+      return null;
+    }
+
+    final fallbackExif = await readExifDateTime(
+      fallbackFile,
       cameraTimezone: cameraTimezone,
-      restoreToleranceSeconds: restoreToleranceSeconds,
-    );
-    final captureLocalDateTime = _resolveCaptureLocalDateTime(
-      exifDateTimeLocal,
-      resolvedTimes.captureStartUtcMs,
-      cameraTimezone,
     );
 
-    return MediaFile(
-      relativePath: file.relativePath,
-      fileName: file.fileName,
-      baseName: file.baseName,
-      extension: file.extension,
-      type: file.type,
-      fileSize: file.fileSize,
-      exifDateTimeLocal: exifDateTimeLocal,
-      exifDateTimeUtcMs: exifDateTimeUtcMs,
-      hasExifTimezone: hasExifTimezone,
-      sourceCreatedTimeUtcMs: file.sourceCreatedTimeUtcMs,
-      sourceModifiedTimeUtcMs: file.sourceModifiedTimeUtcMs,
-      capturedStartTimeUtcMs: resolvedTimes.captureStartUtcMs,
-      capturedEndTimeUtcMs: resolvedTimes.captureStartUtcMs,
-      captureLocalDateTime: captureLocalDateTime,
-      sdCardRoot: file.sdCardRoot,
-      xxHash: file.xxHash,
+    if (fallbackExif.bestLocalDateTime == null) {
+      return null;
+    }
+
+    return (
+      local: fallbackExif.bestLocalDateTime!,
+      utcMs: fallbackExif.bestUtcDateTime?.millisecondsSinceEpoch,
+      hasTimezone: fallbackExif.hasTimezoneOffset,
     );
   }
 
@@ -695,18 +633,13 @@ class SonyFilesystemService {
     ).subtract(offset);
   }
 
-  /// フォルダ単位でベース名の一致判定に使うキーを生成する
-  String _buildBaseNameKey(MediaFile file) {
-    final directory = p.dirname(file.relativePath);
-    return '$directory|${file.baseName}';
-  }
-
   /// フォルダ内の静止画をスキャン
   Future<List<MediaFile>> _scanPhotosInFolder(
     String folderPath,
     List<ImportWarning> warnings, {
     required String cameraTimezone,
     required int restoreToleranceSeconds,
+    required bool shouldReadExif,
     bool Function()? isCancelled,
     void Function(String currentPath)? onFileScanned,
   }) async {
@@ -717,20 +650,15 @@ class SonyFilesystemService {
     }
 
     try {
-      final entities = await dir.list().toList();
-
-      // ファイル名でソート
-      entities.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
-
       _log.debug(
-        'Scanning photo folder: $folderPath (${entities.length} entries).',
+        'Scanning photo folder: $folderPath.',
         tag: 'SonyFilesystem',
       );
 
       int processedCount = 0;
       const int progressLogInterval = 50;
 
-      for (final entity in entities) {
+      await for (final entity in dir.list()) {
         if (isCancelled != null && isCancelled()) {
           throw SonyFilesystemScanCancelled();
         }
@@ -747,6 +675,7 @@ class SonyFilesystemService {
               isProxyFolder: false,
               cameraTimezone: cameraTimezone,
               restoreToleranceSeconds: restoreToleranceSeconds,
+              shouldReadExif: shouldReadExif,
             );
             if (mediaFile != null) {
               files.add(mediaFile);
@@ -765,7 +694,7 @@ class SonyFilesystemService {
           }
           if (processedCount % progressLogInterval == 0) {
             _log.debug(
-              'Photo scan progress: $processedCount/${entities.length} in $folderPath (last: $fileName).',
+              'Photo scan progress: $processedCount in $folderPath (last: $fileName).',
               tag: 'SonyFilesystem',
             );
             await Future<void>.delayed(Duration.zero);
@@ -796,6 +725,7 @@ class SonyFilesystemService {
     required List<ImportWarning> warnings,
     required String cameraTimezone,
     required int restoreToleranceSeconds,
+    required bool shouldReadExif,
     bool Function()? isCancelled,
     void Function(String currentPath)? onFileScanned,
   }) async {
@@ -806,20 +736,15 @@ class SonyFilesystemService {
     }
 
     try {
-      final entities = await dir.list().toList();
-
-      // ファイル名でソート
-      entities.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
-
       _log.debug(
-        'Scanning video folder: $folderPath (${entities.length} entries).',
+        'Scanning video folder: $folderPath.',
         tag: 'SonyFilesystem',
       );
 
       int processedCount = 0;
       const int progressLogInterval = 50;
 
-      for (final entity in entities) {
+      await for (final entity in dir.list()) {
         if (isCancelled != null && isCancelled()) {
           throw SonyFilesystemScanCancelled();
         }
@@ -838,6 +763,7 @@ class SonyFilesystemService {
               isProxyFolder: isProxyFolder,
               cameraTimezone: cameraTimezone,
               restoreToleranceSeconds: restoreToleranceSeconds,
+              shouldReadExif: shouldReadExif,
             );
             if (mediaFile != null) {
               files.add(mediaFile);
@@ -850,6 +776,7 @@ class SonyFilesystemService {
               isProxyFolder: false,
               cameraTimezone: cameraTimezone,
               restoreToleranceSeconds: restoreToleranceSeconds,
+              shouldReadExif: shouldReadExif,
             );
             if (mediaFile != null) {
               files.add(mediaFile);
@@ -868,7 +795,7 @@ class SonyFilesystemService {
           }
           if (processedCount % progressLogInterval == 0) {
             _log.debug(
-              'Video scan progress: $processedCount/${entities.length} in $folderPath (last: $fileName).',
+              'Video scan progress: $processedCount in $folderPath (last: $fileName).',
               tag: 'SonyFilesystem',
             );
             await Future<void>.delayed(Duration.zero);
@@ -955,6 +882,7 @@ class SonyFilesystemService {
     required bool isProxyFolder,
     required String cameraTimezone,
     required int restoreToleranceSeconds,
+    required bool shouldReadExif,
   }) async {
     final filePath = file.path;
     final stopwatch = Stopwatch()..start();
@@ -987,7 +915,7 @@ class SonyFilesystemService {
       int? durationFrames;
       double? frameRate;
 
-      if (mediaType.isPhoto) {
+      if (mediaType.isPhoto && shouldReadExif) {
         exifStopwatch = Stopwatch()..start();
         final exifData = await readExifDateTime(
           file,
@@ -997,7 +925,16 @@ class SonyFilesystemService {
         exifDateTimeLocal = exifData.bestLocalDateTime;
         exifDateTimeUtcMs = exifData.bestUtcDateTime?.millisecondsSinceEpoch;
         hasExifTimezone = exifData.hasTimezoneOffset;
-      } else if (mediaType == MediaType.Video) {
+
+        if (mediaType == MediaType.RAWPhoto && exifDateTimeLocal == null) {
+          final fallback = await _readRawExifFallback(file, cameraTimezone);
+          if (fallback != null) {
+            exifDateTimeLocal = fallback.local;
+            exifDateTimeUtcMs = fallback.utcMs;
+            hasExifTimezone = fallback.hasTimezone;
+          }
+        }
+      } else if (mediaType == MediaType.Video && shouldReadExif) {
         exifStopwatch = Stopwatch()..start();
         final videoDateTime = await readVideoDateTime(
           file,
@@ -1076,6 +1013,31 @@ class SonyFilesystemService {
     }
   }
 
+  /// 取り込み対象ファイルの EXIF/メタデータを解決する
+  ///
+  /// スキャン済みの MediaFile を元に EXIF を読み取り、
+  /// 正確な撮影日時情報を持つ MediaFile を再生成する。
+  Future<MediaFile> resolveMediaFileWithExif(
+    MediaFile scannedFile, {
+    required String cameraTimezone,
+    required int restoreToleranceSeconds,
+  }) async {
+    final file = File(scannedFile.absolutePath);
+    final mediaFile = await _createMediaFile(
+      file,
+      isProxyFolder: scannedFile.type == MediaType.ProxyVideo,
+      cameraTimezone: cameraTimezone,
+      restoreToleranceSeconds: restoreToleranceSeconds,
+      shouldReadExif: true,
+    );
+
+    if (mediaFile == null) {
+      throw Exception('Failed to resolve media file: ${scannedFile.relativePath}');
+    }
+
+    return mediaFile;
+  }
+
   /// ルートパスからの相対パスを取得
   String _getRelativePath(String absolutePath) {
     // パスの正規化と相対パス計算
@@ -1121,5 +1083,35 @@ class SonyFilesystemService {
     } catch (_) {
       return false;
     }
+  }
+
+  /// RAW と同名の JPEG/HIF ファイルを検索
+  Future<File?> _findRawFallbackFile(File rawFile) async {
+    final parentDir = rawFile.parent;
+    final rawName = p.basename(rawFile.path);
+    final baseName = getBaseName(rawName).toLowerCase();
+    final extensions = <String>['.jpg', '.jpeg', '.hif', '.heif'];
+
+    try {
+      await for (final entity in parentDir.list()) {
+        if (entity is File) {
+          final name = p.basename(entity.path);
+          final nameLower = name.toLowerCase();
+          for (final ext in extensions) {
+            if (nameLower == '$baseName$ext') {
+              return entity;
+            }
+          }
+        }
+      }
+    } catch (ex) {
+      _log.warning(
+        'Failed to find RAW fallback file in: ${parentDir.path}.',
+        tag: 'SonyFilesystem',
+        error: ex,
+      );
+    }
+
+    return null;
   }
 }

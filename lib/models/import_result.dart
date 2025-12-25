@@ -112,8 +112,19 @@ class ImportedFileRecord {
   /// xxHash64 ハッシュ値（16 進数文字列）
   final String xxHash;
 
+  /// 取り込み元ファイルの作成日時（UTC ミリ秒）
+  final int sourceCreatedTimeUtcMs;
+
+  /// 取り込み元ファイルの更新日時（UTC ミリ秒）
+  final int sourceModifiedTimeUtcMs;
+
   /// ファイルサイズ（バイト）
   final int fileSize;
+
+  /// 軽量シグネチャ（部分ハッシュ）
+  ///
+  /// 差分判定の高速化に使用する。
+  final FileLightweightSignature? lightweightSignature;
 
   /// 取り込み日時（UTC）
   final DateTime importedAt;
@@ -129,7 +140,10 @@ class ImportedFileRecord {
   ImportedFileRecord({
     required this.sourcePath,
     required this.xxHash,
+    required this.sourceCreatedTimeUtcMs,
+    required this.sourceModifiedTimeUtcMs,
     required this.fileSize,
+    required this.lightweightSignature,
     required this.importedAt,
     required this.destinationPath,
     required this.appVersion,
@@ -144,6 +158,45 @@ class ImportedFileRecord {
   @override
   String toString() {
     return 'ImportedFileRecord(source: $sourcePath, dest: $destinationPath)';
+  }
+}
+
+/// 軽量シグネチャ（部分ハッシュ）を表すクラス
+///
+/// サイズが同じファイルの差分判定を高速化するために使用する。
+@JsonSerializable()
+class FileLightweightSignature {
+  /// チャンクサイズ（バイト）
+  final int chunkSize;
+
+  /// 先頭チャンクのハッシュ
+  final String headHash;
+
+  /// 中間チャンクのハッシュ
+  final String middleHash;
+
+  /// 末尾チャンクのハッシュ
+  final String tailHash;
+
+  FileLightweightSignature({
+    required this.chunkSize,
+    required this.headHash,
+    required this.middleHash,
+    required this.tailHash,
+  });
+
+  /// JSON からデシリアライズ
+  factory FileLightweightSignature.fromJson(Map<String, dynamic> json) => _$FileLightweightSignatureFromJson(json);
+
+  /// JSON にシリアライズ
+  Map<String, dynamic> toJson() => _$FileLightweightSignatureToJson(this);
+
+  /// シグネチャが一致するかを判定
+  bool matches(FileLightweightSignature other) {
+    return chunkSize == other.chunkSize &&
+        headHash == other.headHash &&
+        middleHash == other.middleHash &&
+        tailHash == other.tailHash;
   }
 }
 
@@ -162,7 +215,7 @@ class ImportMetadata {
   final List<ImportedFileRecord> files;
 
   ImportMetadata({
-    this.version = '1.0.0',
+    this.version = '2.0.0',
     required this.lastUpdated,
     required this.files,
   });
@@ -210,6 +263,20 @@ class ImportMetadata {
       updatedFiles.add(record);
     }
 
+    return ImportMetadata(
+      version: version,
+      lastUpdated: DateTime.now().toUtc(),
+      files: updatedFiles,
+    );
+  }
+
+  /// 指定したソースパスのレコードを削除したメタデータを返す
+  ImportMetadata removeRecordsBySourcePath(Set<String> sourcePaths) {
+    if (sourcePaths.isEmpty) {
+      return this;
+    }
+
+    final updatedFiles = files.where((record) => !sourcePaths.contains(record.sourcePath)).toList();
     return ImportMetadata(
       version: version,
       lastUpdated: DateTime.now().toUtc(),
@@ -489,6 +556,21 @@ class ImportProgress {
       totalCount: 0,
       phase: 'スキャン中...',
       scanCurrentPath: scanCurrentPath,
+    );
+  }
+
+  /// 取り込み対象の確定中の進捗を作成
+  factory ImportProgress.preparingTargets({
+    required int processedCount,
+    required int totalCount,
+    String? currentPath,
+    String phase = '取り込み対象を確定中...',
+  }) {
+    return ImportProgress(
+      processedCount: processedCount,
+      totalCount: totalCount,
+      phase: phase,
+      scanCurrentPath: currentPath,
     );
   }
 

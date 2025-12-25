@@ -169,10 +169,23 @@ class ImportEngine {
             successCount++;
             // メタデータに追加
             if (mediaFile.xxHash != null) {
+              FileLightweightSignature? signature;
+              try {
+                signature = await computeFileLightweightSignature(File(mediaFile.absolutePath));
+              } catch (ex) {
+                _log.warning(
+                  'Failed to compute lightweight signature for metadata.',
+                  tag: 'ImportEngine',
+                  error: ex,
+                );
+              }
               final record = ImportedFileRecord(
                 sourcePath: mediaFile.relativePath,
                 xxHash: mediaFile.xxHash!,
+                sourceCreatedTimeUtcMs: mediaFile.sourceCreatedTimeUtcMs,
+                sourceModifiedTimeUtcMs: mediaFile.sourceModifiedTimeUtcMs,
                 fileSize: mediaFile.fileSize,
+                lightweightSignature: signature,
                 importedAt: DateTime.now().toUtc(),
                 destinationPath: _lastDestinationPath ?? '',
                 appVersion: _appVersion,
@@ -318,15 +331,9 @@ class ImportEngine {
     }
     final mediaFiles = scanResult.mediaFiles;
     warnings.addAll(scanResult.warnings);
-    mediaFiles.sort((a, b) {
-      final dateCompare = a.effectiveDateTimeLocal.compareTo(b.effectiveDateTimeLocal);
-      if (dateCompare != 0) {
-        return dateCompare;
-      }
-      return a.relativePath.compareTo(b.relativePath);
-    });
+    mediaFiles.sort((a, b) => a.relativePath.compareTo(b.relativePath));
     _log.debug(
-      'Sorted media files by capture datetime.',
+      'Sorted media files by relative path.',
       tag: 'ImportEngine',
     );
     _log.info('Found ${mediaFiles.length} media files in SD card.', tag: 'ImportEngine');
@@ -344,7 +351,27 @@ class ImportEngine {
       ..reset()
       ..start();
     _log.debug('Phase 4: Determining import targets.', tag: 'ImportEngine');
-    final plan = await _buildImportTargets(mediaFiles, warnings);
+    if (mediaFiles.isNotEmpty) {
+      scanProgress = ImportProgress.preparingTargets(
+        processedCount: 0,
+        totalCount: mediaFiles.length,
+        phase: '取り込み対象を判定中...',
+      );
+      _notifyProgress(scanProgress);
+    }
+    final plan = await _buildImportTargets(
+      mediaFiles,
+      warnings,
+      onProgress: (processedCount, totalCount, currentPath, phase) {
+        scanProgress = ImportProgress.preparingTargets(
+          processedCount: processedCount,
+          totalCount: totalCount,
+          currentPath: currentPath,
+          phase: phase,
+        );
+        _notifyProgress(scanProgress);
+      },
+    );
     _log.debug(
       'Phase 4 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
       tag: 'ImportEngine',
@@ -377,15 +404,52 @@ class ImportEngine {
   /// 既に取り込み済みのファイルを除外し、取り込み対象の合計サイズも算出する。
   Future<({List<ImportPlanItem> items, int totalSize, int skippedCount})> _buildImportTargets(
     List<MediaFile> mediaFiles,
-    List<ImportWarning> warnings,
-  ) async {
+    List<ImportWarning> warnings, {
+    void Function(int processedCount, int totalCount, String? currentPath, String phase)? onProgress,
+  }) async {
     final items = <ImportPlanItem>[];
     var totalSize = 0;
     var skippedCount = 0;
+    final candidates = <({MediaFile file, bool needsDestinationCheck})>[];
+    final metadata = await _metadataManager.load();
+    final recordBySourcePath = {
+      for (final record in metadata.files) record.sourcePath: record,
+    };
+    final signatureCache = <String, FileLightweightSignature>{};
+    final updatedRecords = <ImportedFileRecord>[];
+    final scannedPaths = mediaFiles.map((file) => file.relativePath).toSet();
+    const int progressLogInterval = 200;
+    const int progressUiInterval = 1;
+    final totalFiles = mediaFiles.length;
+    var processedCount = 0;
+
+    final recordsToRemove = <String>{};
+    for (final record in metadata.files) {
+      if (_isSourcePathInScanScope(record.sourcePath) && !scannedPaths.contains(record.sourcePath)) {
+        recordsToRemove.add(record.sourcePath);
+      }
+    }
 
     for (final file in mediaFiles) {
       if (_isCancelled) {
         throw ImportCancelledException();
+      }
+      processedCount++;
+      final shouldReportUi = processedCount % progressUiInterval == 0 || processedCount == totalFiles;
+      final shouldReportLog = processedCount % progressLogInterval == 0 || processedCount == totalFiles;
+      if (onProgress != null && shouldReportUi) {
+        onProgress(
+          processedCount,
+          totalFiles,
+          file.relativePath,
+          '取り込み対象を判定中...',
+        );
+      }
+      if (shouldReportLog) {
+        _log.debug(
+          'Import target scan progress: $processedCount/$totalFiles (last: ${file.relativePath}).',
+          tag: 'ImportEngine',
+        );
       }
       // 書き込み中ファイルはスキップ
       final sourceFile = File(file.absolutePath);
@@ -402,48 +466,228 @@ class ImportEngine {
       }
 
       // 取り込み済みかどうかを確認
-      final existingRecord = await _metadataManager.findRecord(file.relativePath);
+      final existingRecord = recordBySourcePath[file.relativePath];
       if (existingRecord != null) {
         final destPath = p.join(settings.destinationFolder, existingRecord.destinationPath);
-        if (await File(destPath).exists()) {
-          skippedCount++;
-          continue;
-        }
-      } else {
-        // メタデータに記録がない場合はコピー先の同名ファイルを確認する
-        final destFolder = _getDestinationFolder(file);
-        final destPath = p.join(destFolder, file.fileName);
         final destFile = File(destPath);
+        final destExists = await destFile.exists();
 
+        if (destExists) {
+          final shouldSkip = await _shouldSkipWithExistingRecord(
+            existingRecord,
+            file,
+            destFile,
+            signatureCache,
+            updatedRecords,
+          );
+          if (shouldSkip) {
+            skippedCount++;
+            continue;
+          }
+        } else {
+          // 保存先がない場合は再取り込み
+        }
+        candidates.add((file: file, needsDestinationCheck: false));
+      } else {
+        candidates.add((file: file, needsDestinationCheck: true));
+      }
+    }
+
+    if (recordsToRemove.isNotEmpty || updatedRecords.isNotEmpty) {
+      var updatedMetadata = metadata;
+      if (recordsToRemove.isNotEmpty) {
+        updatedMetadata = updatedMetadata.removeRecordsBySourcePath(recordsToRemove);
+      }
+      if (updatedRecords.isNotEmpty) {
+        updatedMetadata = updatedMetadata.upsertRecords(updatedRecords);
+      }
+      await _metadataManager.save(updatedMetadata);
+    }
+
+    final totalCandidates = candidates.length;
+    var resolvedCount = 0;
+
+    for (final candidate in candidates) {
+      if (_isCancelled) {
+        throw ImportCancelledException();
+      }
+
+      resolvedCount++;
+      final shouldReportUi = resolvedCount % progressUiInterval == 0 || resolvedCount == totalCandidates;
+      final shouldReportLog = resolvedCount % progressLogInterval == 0 || resolvedCount == totalCandidates;
+      if (onProgress != null && shouldReportUi) {
+        onProgress(
+          resolvedCount,
+          totalCandidates,
+          candidate.file.relativePath,
+          ' EXIF を解析中...',
+        );
+      }
+      if (shouldReportLog) {
+        _log.debug(
+          'Import target EXIF progress: $resolvedCount/$totalCandidates (last: ${candidate.file.relativePath}).',
+          tag: 'ImportEngine',
+        );
+      }
+      final resolvedFile = await _sonyFs.resolveMediaFileWithExif(
+        candidate.file,
+        cameraTimezone: settings.cameraTimezone,
+        restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+      );
+
+      if (candidate.needsDestinationCheck) {
+        final destFolder = _getDestinationFolder(resolvedFile);
+        final destPath = p.join(destFolder, resolvedFile.fileName);
+        final destFile = File(destPath);
         if (await destFile.exists()) {
-          file.xxHash ??= await computeFileHash(sourceFile);
+          resolvedFile.xxHash ??= await computeFileHash(File(resolvedFile.absolutePath));
           final destHash = await computeFileHash(destFile);
-          if (hashesMatch(file.xxHash!, destHash)) {
+          if (hashesMatch(resolvedFile.xxHash!, destHash)) {
             skippedCount++;
             continue;
           }
         }
       }
 
-      final destinationFolder = _getDestinationFolder(file);
+      final destinationFolder = _getDestinationFolder(resolvedFile);
       final destinationFileName = await _resolvePlannedDestinationFileName(
-        file,
+        resolvedFile,
         destinationFolder,
       );
       final destinationPath = p.join(destinationFolder, destinationFileName);
       items.add(
         ImportPlanItem(
-          file: file,
-          sourcePath: file.relativePath,
+          file: resolvedFile,
+          sourcePath: resolvedFile.relativePath,
           destinationPath: destinationPath,
           destinationFileName: destinationFileName,
           destinationFolder: destinationFolder,
         ),
       );
-      totalSize += file.fileSize;
+      totalSize += resolvedFile.fileSize;
     }
 
     return (items: items, totalSize: totalSize, skippedCount: skippedCount);
+  }
+
+  /// 既存レコードに対してスキップ可能かを判定する
+  Future<bool> _shouldSkipWithExistingRecord(
+    ImportedFileRecord record,
+    MediaFile file,
+    File destinationFile,
+    Map<String, FileLightweightSignature> signatureCache,
+    List<ImportedFileRecord> updatedRecords,
+  ) async {
+    final hasTimeInfo = record.sourceCreatedTimeUtcMs > 0 && record.sourceModifiedTimeUtcMs > 0;
+    final hasSizeInfo = record.fileSize > 0;
+    final isSizeMatch = hasSizeInfo && record.fileSize == file.fileSize;
+    final isTimeMatch =
+        hasTimeInfo &&
+        record.sourceCreatedTimeUtcMs == file.sourceCreatedTimeUtcMs &&
+        record.sourceModifiedTimeUtcMs == file.sourceModifiedTimeUtcMs;
+
+    if (!isSizeMatch) {
+      return false;
+    }
+
+    if (isTimeMatch) {
+      if (record.lightweightSignature != null) {
+        final sourceSignature = await _getSignatureForFile(
+          file.absolutePath,
+          signatureCache,
+        );
+        if (record.lightweightSignature!.matches(sourceSignature)) {
+          return true;
+        }
+        return false;
+      }
+
+      final sourceSignature = await _getSignatureForFile(
+        file.absolutePath,
+        signatureCache,
+      );
+      final destSignature = await _getSignatureForFile(
+        destinationFile.path,
+        signatureCache,
+      );
+      if (sourceSignature.matches(destSignature)) {
+        updatedRecords.add(
+          _withUpdatedSignatureAndTimes(record, file, sourceSignature),
+        );
+        return true;
+      }
+      return false;
+    }
+
+    if (!hasTimeInfo) {
+      final sourceSignature = await _getSignatureForFile(
+        file.absolutePath,
+        signatureCache,
+      );
+      final destSignature = await _getSignatureForFile(
+        destinationFile.path,
+        signatureCache,
+      );
+      if (sourceSignature.matches(destSignature)) {
+        updatedRecords.add(
+          _withUpdatedSignatureAndTimes(record, file, sourceSignature),
+        );
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// シグネチャを取得し、キャッシュに保存する
+  Future<FileLightweightSignature> _getSignatureForFile(
+    String filePath,
+    Map<String, FileLightweightSignature> signatureCache,
+  ) async {
+    final cached = signatureCache[filePath];
+    if (cached != null) {
+      return cached;
+    }
+    final signature = await computeFileLightweightSignature(File(filePath));
+    signatureCache[filePath] = signature;
+    return signature;
+  }
+
+  /// レコードのシグネチャとファイル時刻を更新したコピーを作成する
+  ImportedFileRecord _withUpdatedSignatureAndTimes(
+    ImportedFileRecord record,
+    MediaFile file,
+    FileLightweightSignature signature,
+  ) {
+    return ImportedFileRecord(
+      sourcePath: record.sourcePath,
+      xxHash: record.xxHash,
+      sourceCreatedTimeUtcMs: file.sourceCreatedTimeUtcMs,
+      sourceModifiedTimeUtcMs: file.sourceModifiedTimeUtcMs,
+      fileSize: file.fileSize,
+      lightweightSignature: signature,
+      importedAt: record.importedAt,
+      destinationPath: record.destinationPath,
+      appVersion: record.appVersion,
+    );
+  }
+
+  /// メタデータの削除対象かどうかを判定する
+  bool _isSourcePathInScanScope(String sourcePath) {
+    final normalized = sourcePath.replaceAll('\\', '/').toLowerCase();
+    if (normalized.startsWith('dcim/')) {
+      return true;
+    }
+    if (normalized.startsWith('private/m4root/clip/')) {
+      if (normalized.endsWith('.xml')) {
+        return settings.isImportVideoXML;
+      }
+      return true;
+    }
+    if (normalized.startsWith('private/m4root/sub/')) {
+      return settings.isImportProxyVideos;
+    }
+    return false;
   }
 
   /// 単一ファイルの取り込み処理

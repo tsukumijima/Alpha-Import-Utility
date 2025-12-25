@@ -282,7 +282,7 @@ Future<void> createMockMetadataJson(
   final content =
       '''
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "lastUpdated": "${DateTime.now().toUtc().toIso8601String()}",
   "files": ${_filesToJson(files)}
 }

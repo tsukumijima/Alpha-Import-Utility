@@ -25,7 +25,7 @@ void main() {
           final metadata = await manager.load();
 
           expect(metadata.files, isEmpty);
-          expect(metadata.version, equals('1.0.0'));
+          expect(metadata.version, equals('2.0.0'));
         } finally {
           await cleanup();
         }
@@ -42,6 +42,8 @@ void main() {
               {
                 'sourcePath': 'DCIM/100MSDCF/DSC00001.ARW',
                 'xxHash': 'a1b2c3d4e5f67890',
+                'sourceCreatedTimeUtcMs': 1735060000000,
+                'sourceModifiedTimeUtcMs': 1735063600000,
                 'fileSize': 25165824,
                 'importedAt': '2025-12-24T15:28:00.000Z',
                 'destinationPath': '2025_12_24/DSC00001.ARW',
@@ -93,6 +95,8 @@ void main() {
               {
                 'sourcePath': 'DCIM/100MSDCF/DSC00001.ARW',
                 'xxHash': 'a1b2c3d4e5f67890',
+                'sourceCreatedTimeUtcMs': 1735060000000,
+                'sourceModifiedTimeUtcMs': 1735063600000,
                 'fileSize': 25165824,
                 'importedAt': '2025-12-24T15:28:00.000Z',
                 'destinationPath': '2025_12_24/DSC00001.ARW',
@@ -131,7 +135,10 @@ void main() {
               ImportedFileRecord(
                 sourcePath: 'DCIM/100MSDCF/DSC00001.ARW',
                 xxHash: 'a1b2c3d4e5f67890',
+                sourceCreatedTimeUtcMs: 1735060000000,
+                sourceModifiedTimeUtcMs: 1735063600000,
                 fileSize: 25165824,
+                lightweightSignature: null,
                 importedAt: DateTime.utc(2025, 12, 24, 15, 28),
                 destinationPath: '2025_12_24/DSC00001.ARW',
                 appVersion: '1.0.0',
@@ -148,7 +155,7 @@ void main() {
           // 内容を確認
           final content = await file.readAsString();
           final json = jsonDecode(content) as Map<String, dynamic>;
-          expect(json['version'], equals('1.0.0'));
+          expect(json['version'], equals('2.0.0'));
           expect((json['files'] as List).length, equals(1));
         } finally {
           await cleanup();
@@ -166,7 +173,10 @@ void main() {
               ImportedFileRecord(
                 sourcePath: 'DCIM/100MSDCF/DSC00001.ARW',
                 xxHash: 'a1b2c3d4e5f67890',
+                sourceCreatedTimeUtcMs: 1735060000000,
+                sourceModifiedTimeUtcMs: 1735063600000,
                 fileSize: 25165824,
+                lightweightSignature: null,
                 importedAt: DateTime.utc(2025, 12, 24, 15, 28),
                 destinationPath: '2025_12_24/DSC00001.ARW',
                 appVersion: '1.0.0',
@@ -215,7 +225,10 @@ void main() {
           final record = ImportedFileRecord(
             sourcePath: 'DCIM/100MSDCF/DSC00001.ARW',
             xxHash: 'a1b2c3d4e5f67890',
+            sourceCreatedTimeUtcMs: 1735060000000,
+            sourceModifiedTimeUtcMs: 1735063600000,
             fileSize: 25165824,
+            lightweightSignature: null,
             importedAt: DateTime.utc(2025, 12, 24, 15, 28),
             destinationPath: '2025_12_24/DSC00001.ARW',
             appVersion: '1.0.0',
@@ -243,7 +256,10 @@ void main() {
             ImportedFileRecord(
               sourcePath: 'DCIM/100MSDCF/DSC00001.ARW',
               xxHash: 'hash1',
+              sourceCreatedTimeUtcMs: 1735060000000,
+              sourceModifiedTimeUtcMs: 1735063600000,
               fileSize: 1000,
+              lightweightSignature: null,
               importedAt: DateTime.utc(2025, 12, 24),
               destinationPath: '2025_12_24/DSC00001.ARW',
               appVersion: '1.0.0',
@@ -255,7 +271,10 @@ void main() {
             ImportedFileRecord(
               sourcePath: 'DCIM/100MSDCF/DSC00002.ARW',
               xxHash: 'hash2',
+              sourceCreatedTimeUtcMs: 1735060000000,
+              sourceModifiedTimeUtcMs: 1735063600000,
               fileSize: 2000,
+              lightweightSignature: null,
               importedAt: DateTime.utc(2025, 12, 24),
               destinationPath: '2025_12_24/DSC00002.ARW',
               appVersion: '1.0.0',
@@ -280,7 +299,10 @@ void main() {
             ImportedFileRecord(
               sourcePath: 'DCIM/100MSDCF/DSC00001.ARW',
               xxHash: 'hash1',
+              sourceCreatedTimeUtcMs: 1735060000000,
+              sourceModifiedTimeUtcMs: 1735063600000,
               fileSize: 1000,
+              lightweightSignature: null,
               importedAt: DateTime.utc(2025, 12, 24),
               destinationPath: '2025_12_24/DSC00001.ARW',
               appVersion: '1.0.0',
@@ -288,7 +310,10 @@ void main() {
             ImportedFileRecord(
               sourcePath: 'DCIM/100MSDCF/DSC00002.ARW',
               xxHash: 'hash2',
+              sourceCreatedTimeUtcMs: 1735060000000,
+              sourceModifiedTimeUtcMs: 1735063600000,
               fileSize: 2000,
+              lightweightSignature: null,
               importedAt: DateTime.utc(2025, 12, 24),
               destinationPath: '2025_12_24/DSC00002.ARW',
               appVersion: '1.0.0',
@@ -332,6 +357,8 @@ void main() {
               {
                 'sourcePath': 'DCIM/100MSDCF/DSC00001.ARW',
                 'xxHash': 'a1b2c3d4e5f67890',
+                'sourceCreatedTimeUtcMs': 1735060000000,
+                'sourceModifiedTimeUtcMs': 1735063600000,
                 'fileSize': 25165824,
                 'importedAt': '2025-12-24T15:28:00.000Z',
                 'destinationPath': '2025_12_24/DSC00001.ARW',
@@ -377,6 +404,8 @@ void main() {
               {
                 'sourcePath': 'DCIM/100MSDCF/DSC00001.ARW',
                 'xxHash': 'a1b2c3d4e5f67890',
+                'sourceCreatedTimeUtcMs': 1735060000000,
+                'sourceModifiedTimeUtcMs': 1735063600000,
                 'fileSize': 25165824,
                 'importedAt': '2025-12-24T15:28:00.000Z',
                 'destinationPath': '2025_12_24/DSC00001.ARW',
@@ -451,6 +480,8 @@ void main() {
               {
                 'sourcePath': 'DCIM/100MSDCF/DSC00001.ARW',
                 'xxHash': 'a1b2c3d4e5f67890',
+                'sourceCreatedTimeUtcMs': 1735060000000,
+                'sourceModifiedTimeUtcMs': 1735063600000,
                 'fileSize': 25165824,
                 'importedAt': '2025-12-24T15:28:00.000Z',
                 'destinationPath': '2025_12_24/DSC00001.ARW',
@@ -509,7 +540,7 @@ void main() {
       final metadata = ImportMetadata.empty();
 
       expect(metadata.files, isEmpty);
-      expect(metadata.version, equals('1.0.0'));
+      expect(metadata.version, equals('2.0.0'));
     });
 
     test('findBySourcePath は存在するレコードを返す', () {
@@ -519,7 +550,10 @@ void main() {
           ImportedFileRecord(
             sourcePath: 'DCIM/100MSDCF/DSC00001.ARW',
             xxHash: 'hash1',
+            sourceCreatedTimeUtcMs: 1735060000000,
+            sourceModifiedTimeUtcMs: 1735063600000,
             fileSize: 1000,
+            lightweightSignature: null,
             importedAt: DateTime.utc(2025, 12, 24),
             destinationPath: '2025_12_24/DSC00001.ARW',
             appVersion: '1.0.0',
@@ -546,7 +580,10 @@ void main() {
       final record = ImportedFileRecord(
         sourcePath: 'DCIM/100MSDCF/DSC00001.ARW',
         xxHash: 'hash1',
+        sourceCreatedTimeUtcMs: 1735060000000,
+        sourceModifiedTimeUtcMs: 1735063600000,
         fileSize: 1000,
+        lightweightSignature: null,
         importedAt: DateTime.utc(2025, 12, 24),
         destinationPath: '2025_12_24/DSC00001.ARW',
         appVersion: '1.0.0',
@@ -564,7 +601,10 @@ void main() {
         ImportedFileRecord(
           sourcePath: 'DCIM/100MSDCF/DSC00001.ARW',
           xxHash: 'hash1',
+          sourceCreatedTimeUtcMs: 1735060000000,
+          sourceModifiedTimeUtcMs: 1735063600000,
           fileSize: 1000,
+          lightweightSignature: null,
           importedAt: DateTime.utc(2025, 12, 24),
           destinationPath: '2025_12_24/DSC00001.ARW',
           appVersion: '1.0.0',
@@ -572,7 +612,10 @@ void main() {
         ImportedFileRecord(
           sourcePath: 'DCIM/100MSDCF/DSC00002.ARW',
           xxHash: 'hash2',
+          sourceCreatedTimeUtcMs: 1735060000000,
+          sourceModifiedTimeUtcMs: 1735063600000,
           fileSize: 2000,
+          lightweightSignature: null,
           importedAt: DateTime.utc(2025, 12, 24),
           destinationPath: '2025_12_24/DSC00002.ARW',
           appVersion: '1.0.0',
@@ -590,7 +633,10 @@ void main() {
       final original = ImportedFileRecord(
         sourcePath: 'DCIM/100MSDCF/DSC00001.ARW',
         xxHash: 'a1b2c3d4e5f67890',
+        sourceCreatedTimeUtcMs: 1735060000000,
+        sourceModifiedTimeUtcMs: 1735063600000,
         fileSize: 25165824,
+        lightweightSignature: null,
         importedAt: DateTime.utc(2025, 12, 24, 15, 28),
         destinationPath: '2025_12_24/DSC00001.ARW',
         appVersion: '1.0.0',
