@@ -166,7 +166,7 @@ String getDirectoryPath(String path) {
 ///
 /// [from] から [to] への相対パスを返す。
 String getRelativePath(String from, String to) {
-  return p.relative(to, from: from);
+  return p.relative(to, from: from).replaceAll('\\', '/');
 }
 
 /// OS 生成ファイルを判定する

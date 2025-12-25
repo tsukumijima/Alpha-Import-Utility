@@ -1035,10 +1035,10 @@ class SonyFilesystemService {
       if (relative.startsWith(p.separator)) {
         relative = relative.substring(1);
       }
-      return relative;
+      return relative.replaceAll('\\', '/');
     }
 
-    return normalized;
+    return normalized.replaceAll('\\', '/');
   }
 
   /// SD カードが書き込み可能かどうかを確認
