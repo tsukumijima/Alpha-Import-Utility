@@ -107,6 +107,9 @@ class ImportEngine {
         );
       }
 
+      // 保存先フォルダを作成
+      await ensureDirectoryExists(settings.destinationFolder);
+
       // Phase 5: 容量チェック
       _log.debug('Phase 5: Checking disk space.', tag: 'ImportEngine');
       final totalSize = importPlan.totalSize;
@@ -116,16 +119,20 @@ class ImportEngine {
         tag: 'ImportEngine',
       );
 
-      if (availableSpace != null && availableSpace < totalSize) {
+      if (availableSpace == null) {
+        _log.error('Failed to read disk space for destination folder.', tag: 'ImportEngine');
+        throw ImportFatalException(
+          '保存先の空き容量を取得できないため取り込みを中断しました。',
+        );
+      }
+
+      if (availableSpace < totalSize) {
         _log.error('Insufficient disk space.', tag: 'ImportEngine');
         return ImportResult.error(
           errorMessage:
               'Insufficient disk space. Required: ${formatFileSize(totalSize)}, Available: ${formatFileSize(availableSpace)}',
         );
       }
-
-      // 保存先フォルダを作成
-      await ensureDirectoryExists(settings.destinationFolder);
 
       // Phase 6: 各ファイルの取り込み処理
       _log.debug('Phase 6: Starting file import.', tag: 'ImportEngine');
@@ -153,7 +160,19 @@ class ImportEngine {
 
         if (remainingBytes > 0) {
           final currentAvailableSpace = await getAvailableDiskSpace(settings.destinationFolder);
-          if (currentAvailableSpace != null && remainingBytes > currentAvailableSpace) {
+          if (currentAvailableSpace == null) {
+            _log.error('Failed to read disk space during import.', tag: 'ImportEngine');
+            stopwatch.stop();
+            return ImportResult.error(
+              errorMessage: '保存先の空き容量を取得できないため取り込みを中断しました。',
+              successCount: successCount,
+              skippedCount: skippedCount,
+              warnings: warnings,
+              importedFiles: importedFiles,
+              duration: stopwatch.elapsed,
+            );
+          }
+          if (remainingBytes > currentAvailableSpace) {
             _log.error(
               'Insufficient disk space before copying next file.',
               tag: 'ImportEngine',
