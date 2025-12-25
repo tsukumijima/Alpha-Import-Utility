@@ -387,7 +387,7 @@ Future<VideoDateTime?> readVideoDateTime(
 /// ISO 8601 文字列からローカル時刻（タイムゾーン無し）を取得する
 DateTime? _parseIsoLocalDateTime(String isoString) {
   final match = RegExp(
-    r'^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})',
+    r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})',
   ).firstMatch(isoString);
   if (match == null) {
     return null;
