@@ -363,15 +363,10 @@ class _ImportDialogState extends State<ImportDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '${widget.device.displayName} の取り込み対象',
+          '${widget.device.displayName} の取り込み対象: ${_plan!.items.length} 件',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: Colors.white70,
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '取り込み対象: ${_plan!.items.length} 件',
-          style: theme.textTheme.bodySmall?.copyWith(color: Colors.white54),
         ),
         const SizedBox(height: 16),
         ConstrainedBox(
@@ -393,12 +388,12 @@ class _ImportDialogState extends State<ImportDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '元: ${item.sourcePath}',
+          '取り込み元: ${item.sourcePath}',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 4),
         Text(
-          '先: ${item.destinationPath}',
+          '取り込み先: ${item.destinationPath}',
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
         ),
       ],

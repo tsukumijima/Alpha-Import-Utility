@@ -307,8 +307,8 @@ class MetadataManager {
   ///
   /// 取り込み済みかどうかの判定に使用する。
   Future<ImportedFileRecord?> findRecord(String sourcePath) async {
-    final metadata = await load();
-    return _recordBySourcePath[sourcePath] ?? metadata.findBySourcePath(sourcePath);
+    await load();
+    return _recordBySourcePath[sourcePath];
   }
 
   /// 指定したソースパスが取り込み済みかどうかを確認

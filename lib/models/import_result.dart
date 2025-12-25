@@ -4,6 +4,7 @@
 library;
 
 import 'package:json_annotation/json_annotation.dart';
+
 import 'media_file.dart';
 
 part 'import_result.g.dart';
@@ -580,12 +581,12 @@ class ImportProgress {
     return processedCount / totalCount;
   }
 
-  /// 進捗テキスト（例: '15 / 128 枚'）
+  /// 進捗テキスト（例: '15 / 128 件'）
   String get progressText {
     if (totalCount == 0) {
       return processedCount > 0 ? 'スキャン中（$processedCount 件）' : 'スキャン中...';
     }
-    return '$processedCount / $totalCount 枚';
+    return '$processedCount / $totalCount 件';
   }
 
   /// 新しいファイルの処理を開始
