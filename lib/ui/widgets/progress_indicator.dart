@@ -30,9 +30,8 @@ class ImportProgressIndicator extends StatelessWidget {
         // 全体進捗
         _buildOverallProgress(context, theme),
 
-        const SizedBox(height: 24),
-
         // 現在のファイル進捗
+        if (progress.currentFile != null) const SizedBox(height: 24),
         if (progress.currentFile != null) _buildCurrentFileProgress(context, theme),
       ],
     );
@@ -41,6 +40,8 @@ class ImportProgressIndicator extends StatelessWidget {
   /// 全体進捗を構築
   Widget _buildOverallProgress(BuildContext context, ThemeData theme) {
     final isIndeterminate = progress.totalCount == 0;
+    final scanPath = progress.scanCurrentPath;
+    final leftLabel = isIndeterminate && scanPath != null && scanPath.isNotEmpty ? scanPath : progress.phase;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,8 +51,10 @@ class ImportProgressIndicator extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              progress.phase.isEmpty ? 'インポート中...' : progress.phase,
+              leftLabel.isEmpty ? 'インポート中...' : leftLabel,
               style: theme.textTheme.titleMedium,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             Text(
               progress.progressText,

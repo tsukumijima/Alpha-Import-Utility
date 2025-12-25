@@ -92,6 +92,19 @@ class SonyFilesystemScanResult {
   });
 }
 
+/// スキャンがキャンセルされたことを示す例外
+class SonyFilesystemScanCancelled implements Exception {
+  /// キャンセル理由
+  final String message;
+
+  SonyFilesystemScanCancelled([this.message = 'Scan cancelled.']);
+
+  @override
+  String toString() {
+    return message;
+  }
+}
+
 /// Sony α SD カードのファイルシステム操作を行うサービス
 class SonyFilesystemService {
   /// SD カードのルートパス
@@ -302,6 +315,7 @@ class SonyFilesystemService {
   ///
   /// [settings] に従って取り込み対象ファイルを列挙する。
   /// [onProgress] が指定されている場合、スキャン済み件数を通知する。
+  /// [isCancelled] が true の場合はスキャンを中断する。
   /// ファイルはスキャン順序に従ってソートされる:
   /// 1. DCIM/100MSDCF/ → DCIM/101MSDCF/ → ...（番号順）
   /// 2. PRIVATE/M4ROOT/CLIP/
@@ -310,7 +324,8 @@ class SonyFilesystemService {
   /// 各フォルダ内はファイル名でソートされる。
   Future<SonyFilesystemScanResult> scanMediaFiles(
     ImportSettings settings, {
-    void Function(int processedCount)? onProgress,
+    void Function(int processedCount, String? currentPath)? onProgress,
+    bool Function()? isCancelled,
   }) async {
     final validation = await validate();
     if (!validation.isValid) {
@@ -321,11 +336,15 @@ class SonyFilesystemService {
     final warnings = <ImportWarning>[];
     var processedCount = 0;
 
-    void notifyProgress() {
+    void notifyProgress(String currentPath) {
       processedCount += 1;
       if (onProgress != null) {
-        onProgress(processedCount);
+        onProgress(processedCount, currentPath);
       }
+    }
+
+    if (isCancelled != null && isCancelled()) {
+      throw SonyFilesystemScanCancelled();
     }
 
     // 1. DCIM フォルダ内の静止画をスキャン
@@ -336,6 +355,7 @@ class SonyFilesystemService {
         warnings,
         cameraTimezone: settings.cameraTimezone,
         restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+        isCancelled: isCancelled,
         onFileScanned: notifyProgress,
       );
       photoFiles.addAll(photos);
@@ -358,6 +378,7 @@ class SonyFilesystemService {
         warnings: warnings,
         cameraTimezone: settings.cameraTimezone,
         restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+        isCancelled: isCancelled,
         onFileScanned: notifyProgress,
       );
       mediaFiles.addAll(videos);
@@ -374,6 +395,7 @@ class SonyFilesystemService {
           warnings: warnings,
           cameraTimezone: settings.cameraTimezone,
           restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
+          isCancelled: isCancelled,
           onFileScanned: notifyProgress,
         );
         mediaFiles.addAll(proxyVideos);
@@ -685,7 +707,8 @@ class SonyFilesystemService {
     List<ImportWarning> warnings, {
     required String cameraTimezone,
     required int restoreToleranceSeconds,
-    void Function()? onFileScanned,
+    bool Function()? isCancelled,
+    void Function(String currentPath)? onFileScanned,
   }) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
@@ -708,6 +731,9 @@ class SonyFilesystemService {
       const int progressLogInterval = 50;
 
       for (final entity in entities) {
+        if (isCancelled != null && isCancelled()) {
+          throw SonyFilesystemScanCancelled();
+        }
         if (entity is File) {
           final fileName = p.basename(entity.path);
 
@@ -735,7 +761,7 @@ class SonyFilesystemService {
 
           processedCount += 1;
           if (onFileScanned != null) {
-            onFileScanned();
+            onFileScanned(getRelativePath(rootPath, entity.path));
           }
           if (processedCount % progressLogInterval == 0) {
             _log.debug(
@@ -770,7 +796,8 @@ class SonyFilesystemService {
     required List<ImportWarning> warnings,
     required String cameraTimezone,
     required int restoreToleranceSeconds,
-    void Function()? onFileScanned,
+    bool Function()? isCancelled,
+    void Function(String currentPath)? onFileScanned,
   }) async {
     final files = <MediaFile>[];
     final dir = Directory(folderPath);
@@ -793,6 +820,9 @@ class SonyFilesystemService {
       const int progressLogInterval = 50;
 
       for (final entity in entities) {
+        if (isCancelled != null && isCancelled()) {
+          throw SonyFilesystemScanCancelled();
+        }
         if (entity is File) {
           final fileName = p.basename(entity.path);
 
@@ -834,7 +864,7 @@ class SonyFilesystemService {
 
           processedCount += 1;
           if (onFileScanned != null) {
-            onFileScanned();
+            onFileScanned(getRelativePath(rootPath, entity.path));
           }
           if (processedCount % progressLogInterval == 0) {
             _log.debug(

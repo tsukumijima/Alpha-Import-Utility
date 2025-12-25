@@ -139,9 +139,10 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () => Navigator.pop(context, false),
               child: const Text('キャンセル'),
             ),
-            ElevatedButton(
+            ElevatedButton.icon(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('設定を開く'),
+              icon: const Icon(Icons.settings),
+              label: const Text('設定を開く'),
             ),
           ],
         ),

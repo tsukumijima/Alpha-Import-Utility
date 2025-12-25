@@ -57,9 +57,6 @@ class _ImportDialogState extends State<ImportDialog> {
   /// キャンセル確認中フラグ
   bool _isCancelConfirming = false;
 
-  /// 準備完了後にキャンセルするか
-  bool _shouldCancelAfterPreparation = false;
-
   @override
   void initState() {
     super.initState();
@@ -98,11 +95,6 @@ class _ImportDialogState extends State<ImportDialog> {
         return;
       }
 
-      if (_shouldCancelAfterPreparation) {
-        Navigator.pop(context);
-        return;
-      }
-
       if (plan.items.isEmpty) {
         setState(() {
           _result = ImportResult(
@@ -123,11 +115,9 @@ class _ImportDialogState extends State<ImportDialog> {
         _plan = plan;
         _phase = _ImportDialogPhase.preview;
       });
+    } on ImportCancelledException {
+      return;
     } catch (ex) {
-      if (_shouldCancelAfterPreparation && mounted) {
-        Navigator.pop(context);
-        return;
-      }
       final errorMessage = _engine?.resolveFatalErrorMessage(ex) ?? '取り込み中にエラーが発生したため中断しました。';
       if (mounted) {
         setState(() {
@@ -168,9 +158,10 @@ class _ImportDialogState extends State<ImportDialog> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('続行'),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('キャンセル'),
+            icon: const Icon(Icons.cancel),
+            label: const Text('キャンセル'),
           ),
         ],
       ),
@@ -180,7 +171,10 @@ class _ImportDialogState extends State<ImportDialog> {
       if (_phase == _ImportDialogPhase.importing) {
         _engine?.cancel();
       } else if (_phase == _ImportDialogPhase.preparing) {
-        _shouldCancelAfterPreparation = true;
+        _engine?.cancel();
+        if (mounted) {
+          Navigator.pop(context);
+        }
       } else if (_phase == _ImportDialogPhase.preview) {
         if (mounted) {
           Navigator.pop(context);
@@ -335,7 +329,7 @@ class _ImportDialogState extends State<ImportDialog> {
   /// キャンセル確認メッセージを取得
   String _getCancelMessage() {
     if (_phase == _ImportDialogPhase.preparing) {
-      return 'スキャンが完了した時点で取り込みを中止します。';
+      return 'スキャンを中止してダイアログを閉じます。';
     }
     if (_phase == _ImportDialogPhase.preview) {
       return '取り込みを開始せずにプレビューを閉じます。';
@@ -444,9 +438,10 @@ class _ImportDialogState extends State<ImportDialog> {
         onPressed: _openDestinationFolder,
         child: const Text('保存先を開く'),
       ),
-      ElevatedButton(
+      ElevatedButton.icon(
         onPressed: () => Navigator.pop(context),
-        child: const Text('閉じる'),
+        icon: const Icon(Icons.close),
+        label: const Text('閉じる'),
       ),
     ];
   }
@@ -458,9 +453,10 @@ class _ImportDialogState extends State<ImportDialog> {
         onPressed: _isCancelConfirming ? null : _requestCancel,
         child: const Text('キャンセル'),
       ),
-      ElevatedButton(
+      ElevatedButton.icon(
         onPressed: () => _startImport(plan: _plan),
-        child: const Text('続行'),
+        icon: const Icon(Icons.arrow_forward),
+        label: const Text('続行'),
       ),
     ];
   }

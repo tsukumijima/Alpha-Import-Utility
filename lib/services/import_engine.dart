@@ -242,6 +242,10 @@ class ImportEngine {
     final warnings = <ImportWarning>[];
     final phaseStopwatch = Stopwatch();
 
+    if (_isCancelled) {
+      throw ImportCancelledException();
+    }
+
     // Phase 1: SD カード構造の検証
     phaseStopwatch
       ..reset()
@@ -255,6 +259,10 @@ class ImportEngine {
       throw ImportFatalException(
         'Sony SD card structure validation failed: ${validation.errorMessage}',
       );
+    }
+
+    if (_isCancelled) {
+      throw ImportCancelledException();
     }
 
     _log.debug(
@@ -275,6 +283,10 @@ class ImportEngine {
       );
     }
 
+    if (_isCancelled) {
+      throw ImportCancelledException();
+    }
+
     _log.debug(
       'Phase 2 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
       tag: 'ImportEngine',
@@ -288,13 +300,22 @@ class ImportEngine {
     var scanProgress = ImportProgress.scanning();
     _notifyProgress(scanProgress);
 
-    final scanResult = await _sonyFs.scanMediaFiles(
-      settings,
-      onProgress: (processedCount) {
-        scanProgress = ImportProgress.scanning(processedCount: processedCount);
-        _notifyProgress(scanProgress);
-      },
-    );
+    late final SonyFilesystemScanResult scanResult;
+    try {
+      scanResult = await _sonyFs.scanMediaFiles(
+        settings,
+        onProgress: (processedCount, currentPath) {
+          scanProgress = ImportProgress.scanning(
+            processedCount: processedCount,
+            scanCurrentPath: currentPath,
+          );
+          _notifyProgress(scanProgress);
+        },
+        isCancelled: () => _isCancelled,
+      );
+    } on SonyFilesystemScanCancelled {
+      throw ImportCancelledException();
+    }
     final mediaFiles = scanResult.mediaFiles;
     warnings.addAll(scanResult.warnings);
     mediaFiles.sort((a, b) {
@@ -314,6 +335,10 @@ class ImportEngine {
       tag: 'ImportEngine',
     );
 
+    if (_isCancelled) {
+      throw ImportCancelledException();
+    }
+
     // Phase 4: 取り込み対象の確定
     phaseStopwatch
       ..reset()
@@ -324,6 +349,10 @@ class ImportEngine {
       'Phase 4 completed in ${phaseStopwatch.elapsedMilliseconds}ms.',
       tag: 'ImportEngine',
     );
+
+    if (_isCancelled) {
+      throw ImportCancelledException();
+    }
 
     return ImportPlan(
       items: plan.items,
@@ -355,6 +384,9 @@ class ImportEngine {
     var skippedCount = 0;
 
     for (final file in mediaFiles) {
+      if (_isCancelled) {
+        throw ImportCancelledException();
+      }
       // 書き込み中ファイルはスキップ
       final sourceFile = File(file.absolutePath);
       if (await isFileBeingWritten(sourceFile)) {
@@ -695,6 +727,9 @@ class ImportEngine {
     if (ex is ImportFatalException) {
       return ex.userMessage;
     }
+    if (ex is ImportCancelledException) {
+      return '取り込みがキャンセルされました。';
+    }
     if (ex is UnsupportedError) {
       return 'ファイル日時の取得または復元に必要なネイティブ API が利用できないため取り込みを中断しました。';
     }
@@ -718,6 +753,21 @@ class ImportFatalException implements Exception {
   @override
   String toString() {
     return debugMessage == null ? userMessage : '$userMessage ($debugMessage)';
+  }
+}
+
+/// 取り込み準備中のキャンセル例外
+class ImportCancelledException implements Exception {
+  /// ユーザー向けのキャンセル理由
+  final String message;
+
+  ImportCancelledException([
+    this.message = 'Import cancelled by user.',
+  ]);
+
+  @override
+  String toString() {
+    return message;
   }
 }
 

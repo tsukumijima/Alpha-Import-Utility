@@ -88,12 +88,12 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
           children: [
             // ダイアログヘッダー
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
               child: Row(
                 children: [
                   Icon(Icons.settings, color: theme.colorScheme.primary),
                   const SizedBox(width: 12),
-                  Text('設定', style: theme.textTheme.headlineSmall),
+                  Text('設定', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -129,9 +129,10 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
                     child: const Text('キャンセル'),
                   ),
                   const SizedBox(width: 8),
-                  ElevatedButton(
+                  ElevatedButton.icon(
                     onPressed: _settings.hasDestinationFolder ? () => Navigator.pop(context, _settings) : null,
-                    child: const Text('保存'),
+                    icon: const Icon(Icons.save),
+                    label: const Text('保存'),
                   ),
                 ],
               ),
