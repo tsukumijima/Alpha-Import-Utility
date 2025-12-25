@@ -197,9 +197,30 @@ bool isOsGeneratedFile(String fileName) {
 /// 取得できない場合は null を返す。
 Future<int?> getAvailableDiskSpace(String path) async {
   try {
-    return await FileTimeService.instance.getAvailableDiskSpace(path);
+    final resolvedPath = await _resolveDiskSpacePath(path);
+    return await FileTimeService.instance.getAvailableDiskSpace(resolvedPath);
   } catch (_) {
     return null;
+  }
+}
+
+/// ディスク空き容量取得に使用するパスを解決する
+///
+/// シンボリックリンクを解決し、存在しない場合は親ディレクトリへ遡る。
+Future<String> _resolveDiskSpacePath(String path) async {
+  var currentDir = Directory(path);
+  while (!await currentDir.exists()) {
+    final parent = currentDir.parent;
+    if (parent.path == currentDir.path) {
+      break;
+    }
+    currentDir = parent;
+  }
+
+  try {
+    return await currentDir.resolveSymbolicLinks();
+  } catch (_) {
+    return currentDir.path;
   }
 }
 

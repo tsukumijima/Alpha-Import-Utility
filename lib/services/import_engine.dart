@@ -135,6 +135,7 @@ class ImportEngine {
         phase: '取り込み中...',
       );
       _notifyProgress(progress);
+      var remainingBytes = totalSize;
 
       for (final planItem in importTargets) {
         final mediaFile = planItem.file;
@@ -148,6 +149,26 @@ class ImportEngine {
             importedFiles: importedFiles,
             duration: stopwatch.elapsed,
           );
+        }
+
+        if (remainingBytes > 0) {
+          final currentAvailableSpace = await getAvailableDiskSpace(settings.destinationFolder);
+          if (currentAvailableSpace != null && remainingBytes > currentAvailableSpace) {
+            _log.error(
+              'Insufficient disk space before copying next file.',
+              tag: 'ImportEngine',
+            );
+            stopwatch.stop();
+            return ImportResult.error(
+              errorMessage:
+                  '保存先の空き容量が不足しているため取り込みを中断しました。必要: ${formatFileSize(remainingBytes)}、空き: ${formatFileSize(currentAvailableSpace)}。',
+              successCount: successCount,
+              skippedCount: skippedCount,
+              warnings: warnings,
+              importedFiles: importedFiles,
+              duration: stopwatch.elapsed,
+            );
+          }
         }
 
         // 進捗通知
@@ -170,6 +191,10 @@ class ImportEngine {
         switch (result) {
           case _FileProcessResult.imported:
             successCount++;
+            remainingBytes -= mediaFile.fileSize;
+            if (remainingBytes < 0) {
+              remainingBytes = 0;
+            }
             // メタデータに追加
             if (mediaFile.xxHash != null) {
               FileLightweightSignature? signature;
@@ -212,9 +237,17 @@ class ImportEngine {
             break;
           case _FileProcessResult.skipped:
             skippedCount++;
+            remainingBytes -= mediaFile.fileSize;
+            if (remainingBytes < 0) {
+              remainingBytes = 0;
+            }
             break;
           case _FileProcessResult.error:
             errorCount++;
+            remainingBytes -= mediaFile.fileSize;
+            if (remainingBytes < 0) {
+              remainingBytes = 0;
+            }
             break;
         }
 
