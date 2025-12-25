@@ -7,8 +7,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../models/settings.dart';
 import '../models/import_result.dart';
+import '../models/settings.dart';
 import '../services/device_detector.dart';
 import '../services/import_engine.dart';
 import 'widgets/progress_indicator.dart';
@@ -253,7 +253,7 @@ class _ImportDialogState extends State<ImportDialog> {
       children: [
         // デバイス情報
         Text(
-          '${widget.device.displayName} から$statusText',
+          '${widget.device.displayName} から$statusText...',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Colors.white70,
           ),

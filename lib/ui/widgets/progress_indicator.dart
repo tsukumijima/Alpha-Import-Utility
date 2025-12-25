@@ -52,7 +52,10 @@ class ImportProgressIndicator extends StatelessWidget {
           children: [
             Text(
               leftLabel.isEmpty ? 'インポート中...' : leftLabel,
-              style: theme.textTheme.titleMedium,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontSize: 15,
+                fontWeight: FontWeight.normal,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -60,7 +63,8 @@ class ImportProgressIndicator extends StatelessWidget {
               progress.progressText,
               style: theme.textTheme.titleMedium?.copyWith(
                 color: theme.colorScheme.primary,
-                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                fontWeight: FontWeight.normal,
               ),
             ),
           ],

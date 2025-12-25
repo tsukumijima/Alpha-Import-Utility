@@ -10,9 +10,14 @@ ThemeData getAppTheme() {
   // Sony α のイメージカラー（オレンジ）をアクセントカラーとして使用
   const sonyOrange = Color(0xFFFF6D00);
 
+  // Flutter は明示的に日本語フォントを指定しないと fontWeight の指定が効かないらしい
+  // ref: https://github.com/flutter/flutter/issues/179104#issuecomment-3580632879
+  const fontFamilyFallback = <String>['Hiragino Sans', 'Noto Sans JP', 'Noto Sans CJK JP'];
+
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
+    fontFamilyFallback: fontFamilyFallback,
 
     // カラースキーム
     colorScheme: ColorScheme.fromSeed(
@@ -42,6 +47,7 @@ ThemeData getAppTheme() {
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: Colors.white,
+        fontFamilyFallback: fontFamilyFallback,
       ),
     ),
 
@@ -59,10 +65,14 @@ ThemeData getAppTheme() {
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: sonyOrange,
-        foregroundColor: Colors.black,
+        foregroundColor: Colors.white,
         elevation: 2,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        textStyle: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontFamilyFallback: fontFamilyFallback,
+        ),
       ),
     ),
 
@@ -99,6 +109,7 @@ ThemeData getAppTheme() {
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: Colors.white,
+        fontFamilyFallback: fontFamilyFallback,
       ),
     ),
 
@@ -126,8 +137,8 @@ ThemeData getAppTheme() {
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: sonyOrange, width: 2),
       ),
-      labelStyle: const TextStyle(color: Colors.white70),
-      hintStyle: const TextStyle(color: Colors.white38),
+      labelStyle: const TextStyle(color: Colors.white70, fontFamilyFallback: fontFamilyFallback),
+      hintStyle: const TextStyle(color: Colors.white38, fontFamilyFallback: fontFamilyFallback),
     ),
 
     // ドロップダウン
@@ -179,21 +190,108 @@ ThemeData getAppTheme() {
     // テキストテーマ
     // height は line-height の設定。1.5 は 150% を意味する。
     textTheme: const TextTheme(
-      displayLarge: TextStyle(fontSize: 57, fontWeight: FontWeight.bold, color: Colors.white, height: 1.3),
-      displayMedium: TextStyle(fontSize: 45, fontWeight: FontWeight.bold, color: Colors.white, height: 1.3),
-      displaySmall: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white, height: 1.3),
-      headlineLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.w600, color: Colors.white, height: 1.4),
-      headlineMedium: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: Colors.white, height: 1.4),
-      headlineSmall: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: Colors.white, height: 1.4),
-      titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w500, color: Colors.white, height: 1.4),
-      titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.white, height: 1.5),
-      titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white, height: 1.5),
-      bodyLarge: TextStyle(fontSize: 16, color: Colors.white, height: 1.6),
-      bodyMedium: TextStyle(fontSize: 14, color: Colors.white, height: 1.6),
-      bodySmall: TextStyle(fontSize: 12, color: Colors.white70, height: 1.6),
-      labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white, height: 1.5),
-      labelMedium: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white, height: 1.5),
-      labelSmall: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70, height: 1.5),
+      displayLarge: TextStyle(
+        fontSize: 57,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+        height: 1.3,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      displayMedium: TextStyle(
+        fontSize: 45,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+        height: 1.3,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      displaySmall: TextStyle(
+        fontSize: 36,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+        height: 1.3,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      headlineLarge: TextStyle(
+        fontSize: 32,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+        height: 1.4,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      headlineMedium: TextStyle(
+        fontSize: 28,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+        height: 1.4,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      headlineSmall: TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+        height: 1.4,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      titleLarge: TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.w500,
+        color: Colors.white,
+        height: 1.4,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      titleMedium: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        color: Colors.white,
+        height: 1.5,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      titleSmall: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: Colors.white,
+        height: 1.5,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      bodyLarge: TextStyle(
+        fontSize: 16,
+        color: Colors.white,
+        height: 1.6,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      bodyMedium: TextStyle(
+        fontSize: 14,
+        color: Colors.white,
+        height: 1.6,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      bodySmall: TextStyle(
+        fontSize: 12,
+        color: Colors.white70,
+        height: 1.6,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      labelLarge: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: Colors.white,
+        height: 1.5,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      labelMedium: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: Colors.white,
+        height: 1.5,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      labelSmall: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
+        color: Colors.white70,
+        height: 1.5,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
     ),
   );
 }
@@ -207,9 +305,9 @@ BoxDecoration getGradientBackground() {
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
-        Color(0xFF1A1A1A),
+        Color(0xFF1C1C1C),
         Color(0xFF121212),
-        Color(0xFF0A0A0A),
+        Color(0xFF080808),
       ],
     ),
   );
