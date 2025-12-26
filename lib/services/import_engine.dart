@@ -535,8 +535,18 @@ class ImportEngine {
         );
       }
       // 書き込み中ファイルはスキップ
-      final sourceFile = File(file.absolutePath);
-      if (await isFileBeingWritten(sourceFile)) {
+      // 性能最適化: スキャン時に取得済みの更新日時を再利用し、追加の stat() 呼び出しを回避する。
+      // トレードオフ: スキャン〜判定間にファイルが変更された場合は検出できないが、
+      // カメラの USB MSC 接続中は撮影不可であり、SD カードの場合も故意に操作しない限り
+      // ファイル変更は発生しないため、実用上は問題ない。
+      const int writingThresholdSeconds = 30;
+      final modifiedUtc = DateTime.fromMillisecondsSinceEpoch(
+        file.sourceModifiedTimeUtcMs,
+        isUtc: true,
+      );
+      final nowUtc = DateTime.now().toUtc();
+      final diffFromModified = nowUtc.difference(modifiedUtc);
+      if (diffFromModified.inSeconds.abs() < writingThresholdSeconds) {
         warnings.add(
           ImportWarning(
             type: ImportWarningType.FileInUseSkipped,
