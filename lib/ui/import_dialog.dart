@@ -244,6 +244,7 @@ class _ImportDialogState extends State<ImportDialog> {
         }
       },
       child: AlertDialog(
+        scrollable: true,
         title: Text(_getDialogTitle()),
         content: SizedBox(
           width: 500,
@@ -435,30 +436,42 @@ class _ImportDialogState extends State<ImportDialog> {
 
   /// 警告一覧を構築
   Widget _buildWarningsList() {
+    final theme = Theme.of(context);
     return ExpansionTile(
       title: Text(
         '警告 (${_result!.warnings.length}件)',
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+        style: theme.textTheme.titleSmall?.copyWith(
           color: Colors.orange,
         ),
       ),
       initiallyExpanded: false,
-      children: _result!.warnings.map((warning) {
-        return ListTile(
-          dense: true,
-          leading: const Icon(Icons.warning_outlined, color: Colors.orange, size: 20),
-          title: Text(
-            warning.file.fileName,
-            style: Theme.of(context).textTheme.bodySmall,
+      children: [
+        SizedBox(
+          height: 240,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: _result!.warnings.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final warning = _result!.warnings[index];
+              return ListTile(
+                dense: true,
+                leading: const Icon(Icons.warning_outlined, color: Colors.orange, size: 20),
+                title: Text(
+                  warning.file.fileName,
+                  style: theme.textTheme.bodySmall,
+                ),
+                subtitle: Text(
+                  warning.message,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white54,
+                  ),
+                ),
+              );
+            },
           ),
-          subtitle: Text(
-            warning.message,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.white54,
-            ),
-          ),
-        );
-      }).toList(),
+        ),
+      ],
     );
   }
 
