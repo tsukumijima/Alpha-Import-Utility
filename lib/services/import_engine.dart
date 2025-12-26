@@ -1402,6 +1402,7 @@ class _DestinationFolderIndex {
       }
     }
 
+    snapshot.fileNames.add(candidate);
     return candidate;
   }
 
@@ -1454,13 +1455,13 @@ class _DestinationFolderSnapshot {
   /// ファイル名一覧
   final Set<String> fileNames;
 
-  const _DestinationFolderSnapshot({
+  _DestinationFolderSnapshot({
     required this.fileNames,
   });
 
   /// 空のスナップショットを生成する
   factory _DestinationFolderSnapshot.empty() {
-    return const _DestinationFolderSnapshot(
+    return _DestinationFolderSnapshot(
       fileNames: <String>{},
     );
   }
