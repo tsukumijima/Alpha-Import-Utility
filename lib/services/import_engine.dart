@@ -580,6 +580,16 @@ class ImportEngine {
             continue;
           }
         } else {
+          final shouldSkip = await _trySkipWithRestoredOriginalDestination(
+            existingRecord,
+            file,
+            signatureCache,
+            updatedRecords,
+          );
+          if (shouldSkip) {
+            skippedCount++;
+            continue;
+          }
           // 保存先がない場合は再取り込み
         }
         candidates.add((file: file, needsDestinationCheck: false));
@@ -735,6 +745,69 @@ class ImportEngine {
     return false;
   }
 
+  /// 保存先ファイルが失われた場合に、元のファイル名で復元されたファイルを判定する
+  ///
+  /// 同一フォルダ内に元のファイル名が存在し、サイズとシグネチャが一致した場合はスキップ対象とする。
+  Future<bool> _trySkipWithRestoredOriginalDestination(
+    ImportedFileRecord record,
+    MediaFile file,
+    Map<String, FileLightweightSignature> signatureCache,
+    List<ImportedFileRecord> updatedRecords,
+  ) async {
+    final normalizedDestinationPath = record.destinationPath.replaceAll('\\', '/');
+    final destinationFolder = p.posix.dirname(normalizedDestinationPath);
+    final destinationFolderPath = destinationFolder == '.' ? '' : destinationFolder;
+    final candidatePath = destinationFolderPath.isEmpty
+        ? p.join(settings.destinationFolder, file.fileName)
+        : p.join(settings.destinationFolder, destinationFolderPath, file.fileName);
+    final candidateFile = File(candidatePath);
+    if (!await candidateFile.exists()) {
+      return false;
+    }
+
+    // サイズが一致しない場合は別ファイルとして扱う
+    if (record.fileSize <= 0 || record.fileSize != file.fileSize) {
+      return false;
+    }
+
+    final isSignatureMatch = await _isRestoredDestinationMatch(
+      record,
+      candidateFile,
+      signatureCache,
+    );
+    if (!isSignatureMatch) {
+      return false;
+    }
+
+    final updatedDestinationPath = destinationFolderPath.isEmpty
+        ? file.fileName
+        : p.posix.join(destinationFolderPath, file.fileName);
+    updatedRecords.add(
+      _withUpdatedDestinationPath(record, updatedDestinationPath),
+    );
+    return true;
+  }
+
+  /// 復元済みの保存先ファイルが同一かを判定する
+  ///
+  /// 軽量シグネチャがある場合はそれを優先し、無い場合はフルハッシュで判定する。
+  Future<bool> _isRestoredDestinationMatch(
+    ImportedFileRecord record,
+    File candidateFile,
+    Map<String, FileLightweightSignature> signatureCache,
+  ) async {
+    if (record.lightweightSignature != null) {
+      final candidateSignature = await _getSignatureForFile(
+        candidateFile.path,
+        signatureCache,
+      );
+      return record.lightweightSignature!.matches(candidateSignature);
+    }
+
+    final candidateHash = await computeFileHash(candidateFile);
+    return hashesMatch(record.xxHash, candidateHash);
+  }
+
   /// シグネチャを取得し、キャッシュに保存する
   Future<FileLightweightSignature> _getSignatureForFile(
     String filePath,
@@ -747,6 +820,24 @@ class ImportEngine {
     final signature = await computeFileLightweightSignature(File(filePath));
     signatureCache[filePath] = signature;
     return signature;
+  }
+
+  /// レコードの保存先パスだけを更新したコピーを作成する
+  ImportedFileRecord _withUpdatedDestinationPath(
+    ImportedFileRecord record,
+    String destinationPath,
+  ) {
+    return ImportedFileRecord(
+      sourcePath: record.sourcePath,
+      xxHash: record.xxHash,
+      sourceCreatedTimeUtcMs: record.sourceCreatedTimeUtcMs,
+      sourceModifiedTimeUtcMs: record.sourceModifiedTimeUtcMs,
+      fileSize: record.fileSize,
+      lightweightSignature: record.lightweightSignature,
+      importedAt: record.importedAt,
+      destinationPath: destinationPath,
+      appVersion: record.appVersion,
+    );
   }
 
   /// レコードのシグネチャとファイル時刻を更新したコピーを作成する
