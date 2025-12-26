@@ -498,6 +498,7 @@ class ImportEngine {
       for (final record in metadata.files) normalizeSourcePathForLookup(record.sourcePath): record,
     };
     final signatureCache = <String, FileLightweightSignature>{};
+    final destinationFolderIndex = _DestinationFolderIndex(_log);
     final updatedRecords = <ImportedFileRecord>[];
     final scannedPaths = mediaFiles.map((file) => normalizeSourcePathForLookup(file.relativePath)).toSet();
     const int progressLogInterval = 200;
@@ -512,6 +513,23 @@ class ImportEngine {
         recordsToRemove.add(record.sourcePath);
       }
     }
+
+    // 既存レコードの保存先フォルダは先にスナップショットを作成して I/O を削減する
+    final destinationFoldersForRecords = <String>{};
+    for (final file in mediaFiles) {
+      final normalizedSourcePath = normalizeSourcePathForLookup(file.relativePath);
+      final existingRecord = recordBySourcePath[normalizedSourcePath];
+      if (existingRecord == null) {
+        continue;
+      }
+      final normalizedDestinationPath = existingRecord.destinationPath.replaceAll('\\', '/');
+      final destinationFolderPath = p.posix.dirname(normalizedDestinationPath);
+      final destinationFolder = destinationFolderPath == '.'
+          ? settings.destinationFolder
+          : p.join(settings.destinationFolder, destinationFolderPath);
+      destinationFoldersForRecords.add(destinationFolder);
+    }
+    await destinationFolderIndex.prewarm(destinationFoldersForRecords);
 
     for (final file in mediaFiles) {
       if (_isCancelled) {
@@ -563,11 +581,20 @@ class ImportEngine {
       final existingRecord = recordBySourcePath[normalizedSourcePath];
       if (existingRecord != null) {
         final normalizedDestinationPath = existingRecord.destinationPath.replaceAll('\\', '/');
-        final destPath = p.join(settings.destinationFolder, normalizedDestinationPath);
-        final destFile = File(destPath);
-        final destExists = await destFile.exists();
+        final destinationFolderPath = p.posix.dirname(normalizedDestinationPath);
+        final destinationFolder = destinationFolderPath == '.'
+            ? settings.destinationFolder
+            : p.join(settings.destinationFolder, destinationFolderPath);
+        final destinationFileName = p.posix.basename(normalizedDestinationPath);
+        final destPath = p.join(destinationFolder, destinationFileName);
+        final destExists = await destinationFolderIndex.containsFile(
+          destinationFolder,
+          destinationFileName,
+          confirmWhenMissing: true,
+        );
 
         if (destExists) {
+          final destFile = File(destPath);
           final shouldSkip = await _shouldSkipWithExistingRecord(
             existingRecord,
             file,
@@ -583,6 +610,7 @@ class ImportEngine {
           final shouldSkip = await _trySkipWithRestoredOriginalDestination(
             existingRecord,
             file,
+            destinationFolderIndex,
             signatureCache,
             updatedRecords,
           );
@@ -611,6 +639,7 @@ class ImportEngine {
 
     final totalCandidates = candidates.length;
     var resolvedCount = 0;
+    final resolvedCandidates = <({MediaFile file, bool needsDestinationCheck})>[];
 
     for (final candidate in candidates) {
       if (_isCancelled) {
@@ -641,36 +670,63 @@ class ImportEngine {
         restoreToleranceSeconds: settings.dateRestoreToleranceSeconds,
       );
 
+      resolvedCandidates.add(
+        (
+          file: resolvedFile,
+          needsDestinationCheck: candidate.needsDestinationCheck,
+        ),
+      );
+    }
+
+    // EXIF 解決後に保存先フォルダの一覧をまとめて取得し、exists チェックの I/O を削減する
+    final destinationFoldersForCandidates = <String>{};
+    for (final candidate in resolvedCandidates) {
+      final destinationFolder = _getDestinationFolder(candidate.file);
+      destinationFoldersForCandidates.add(destinationFolder);
+    }
+    await destinationFolderIndex.prewarm(destinationFoldersForCandidates);
+
+    for (final candidate in resolvedCandidates) {
+      if (_isCancelled) {
+        throw ImportCancelledException();
+      }
+
       if (candidate.needsDestinationCheck) {
-        final destFolder = _getDestinationFolder(resolvedFile);
-        final destPath = p.join(destFolder, resolvedFile.fileName);
+        final destFolder = _getDestinationFolder(candidate.file);
+        final destPath = p.join(destFolder, candidate.file.fileName);
         final destFile = File(destPath);
-        if (await destFile.exists()) {
-          resolvedFile.xxHash ??= await computeFileHash(File(resolvedFile.absolutePath));
+        final destExists = await destinationFolderIndex.containsFile(
+          destFolder,
+          candidate.file.fileName,
+          confirmWhenMissing: false,
+        );
+        if (destExists) {
+          candidate.file.xxHash ??= await computeFileHash(File(candidate.file.absolutePath));
           final destHash = await computeFileHash(destFile);
-          if (hashesMatch(resolvedFile.xxHash!, destHash)) {
+          if (hashesMatch(candidate.file.xxHash!, destHash)) {
             skippedCount++;
             continue;
           }
         }
       }
 
-      final destinationFolder = _getDestinationFolder(resolvedFile);
+      final destinationFolder = _getDestinationFolder(candidate.file);
       final destinationFileName = await _resolvePlannedDestinationFileName(
-        resolvedFile,
+        candidate.file,
         destinationFolder,
+        destinationFolderIndex,
       );
       final destinationPath = p.join(destinationFolder, destinationFileName);
       items.add(
         ImportPlanItem(
-          file: resolvedFile,
-          sourcePath: resolvedFile.relativePath,
+          file: candidate.file,
+          sourcePath: candidate.file.relativePath,
           destinationPath: destinationPath,
           destinationFileName: destinationFileName,
           destinationFolder: destinationFolder,
         ),
       );
-      totalSize += resolvedFile.fileSize;
+      totalSize += candidate.file.fileSize;
     }
 
     return (items: items, totalSize: totalSize, skippedCount: skippedCount);
@@ -742,6 +798,24 @@ class ImportEngine {
       }
     }
 
+    if (hasTimeInfo) {
+      // タイムスタンプが不一致でも、内容が一致すれば同一ファイルとして扱う
+      final sourceSignature = await _getSignatureForFile(
+        file.absolutePath,
+        signatureCache,
+      );
+      final destSignature = await _getSignatureForFile(
+        destinationFile.path,
+        signatureCache,
+      );
+      if (sourceSignature.matches(destSignature)) {
+        updatedRecords.add(
+          _withUpdatedSignatureAndTimes(record, file, sourceSignature),
+        );
+        return true;
+      }
+    }
+
     return false;
   }
 
@@ -751,17 +825,26 @@ class ImportEngine {
   Future<bool> _trySkipWithRestoredOriginalDestination(
     ImportedFileRecord record,
     MediaFile file,
+    _DestinationFolderIndex destinationFolderIndex,
     Map<String, FileLightweightSignature> signatureCache,
     List<ImportedFileRecord> updatedRecords,
   ) async {
     final normalizedDestinationPath = record.destinationPath.replaceAll('\\', '/');
     final destinationFolder = p.posix.dirname(normalizedDestinationPath);
     final destinationFolderPath = destinationFolder == '.' ? '' : destinationFolder;
+    final candidateFolderPath = destinationFolderPath.isEmpty
+        ? settings.destinationFolder
+        : p.join(settings.destinationFolder, destinationFolderPath);
     final candidatePath = destinationFolderPath.isEmpty
         ? p.join(settings.destinationFolder, file.fileName)
         : p.join(settings.destinationFolder, destinationFolderPath, file.fileName);
     final candidateFile = File(candidatePath);
-    if (!await candidateFile.exists()) {
+    final candidateExists = await destinationFolderIndex.containsFile(
+      candidateFolderPath,
+      file.fileName,
+      confirmWhenMissing: true,
+    );
+    if (!candidateExists) {
       return false;
     }
 
@@ -770,28 +853,38 @@ class ImportEngine {
       return false;
     }
 
-    final isSignatureMatch = await _isRestoredDestinationMatch(
+    final matchResult = await _isRestoredDestinationMatch(
       record,
       candidateFile,
       signatureCache,
     );
-    if (!isSignatureMatch) {
+    if (!matchResult.isMatch) {
       return false;
     }
 
     final updatedDestinationPath = destinationFolderPath.isEmpty
         ? file.fileName
         : p.posix.join(destinationFolderPath, file.fileName);
-    updatedRecords.add(
-      _withUpdatedDestinationPath(record, updatedDestinationPath),
-    );
+    if (matchResult.shouldUpdateSignature && matchResult.signature != null) {
+      updatedRecords.add(
+        _withUpdatedDestinationPathAndSignature(
+          record,
+          updatedDestinationPath,
+          matchResult.signature!,
+        ),
+      );
+    } else {
+      updatedRecords.add(
+        _withUpdatedDestinationPath(record, updatedDestinationPath),
+      );
+    }
     return true;
   }
 
   /// 復元済みの保存先ファイルが同一かを判定する
   ///
   /// 軽量シグネチャがある場合はそれを優先し、無い場合はフルハッシュで判定する。
-  Future<bool> _isRestoredDestinationMatch(
+  Future<({bool isMatch, FileLightweightSignature? signature, bool shouldUpdateSignature})> _isRestoredDestinationMatch(
     ImportedFileRecord record,
     File candidateFile,
     Map<String, FileLightweightSignature> signatureCache,
@@ -801,11 +894,18 @@ class ImportEngine {
         candidateFile.path,
         signatureCache,
       );
-      return record.lightweightSignature!.matches(candidateSignature);
+      if (record.lightweightSignature!.matches(candidateSignature)) {
+        return (isMatch: true, signature: candidateSignature, shouldUpdateSignature: false);
+      }
+      final candidateHash = await computeFileHash(candidateFile);
+      if (hashesMatch(record.xxHash, candidateHash)) {
+        return (isMatch: true, signature: candidateSignature, shouldUpdateSignature: true);
+      }
+      return (isMatch: false, signature: candidateSignature, shouldUpdateSignature: false);
     }
 
     final candidateHash = await computeFileHash(candidateFile);
-    return hashesMatch(record.xxHash, candidateHash);
+    return (isMatch: hashesMatch(record.xxHash, candidateHash), signature: null, shouldUpdateSignature: false);
   }
 
   /// シグネチャを取得し、キャッシュに保存する
@@ -834,6 +934,25 @@ class ImportEngine {
       sourceModifiedTimeUtcMs: record.sourceModifiedTimeUtcMs,
       fileSize: record.fileSize,
       lightweightSignature: record.lightweightSignature,
+      importedAt: record.importedAt,
+      destinationPath: destinationPath,
+      appVersion: record.appVersion,
+    );
+  }
+
+  /// レコードの保存先パスとシグネチャを更新したコピーを作成する
+  ImportedFileRecord _withUpdatedDestinationPathAndSignature(
+    ImportedFileRecord record,
+    String destinationPath,
+    FileLightweightSignature signature,
+  ) {
+    return ImportedFileRecord(
+      sourcePath: record.sourcePath,
+      xxHash: record.xxHash,
+      sourceCreatedTimeUtcMs: record.sourceCreatedTimeUtcMs,
+      sourceModifiedTimeUtcMs: record.sourceModifiedTimeUtcMs,
+      fileSize: record.fileSize,
+      lightweightSignature: signature,
       importedAt: record.importedAt,
       destinationPath: destinationPath,
       appVersion: record.appVersion,
@@ -973,9 +1092,10 @@ class ImportEngine {
   Future<String> _resolvePlannedDestinationFileName(
     MediaFile file,
     String destinationFolder,
+    _DestinationFolderIndex destinationFolderIndex,
   ) async {
-    return generateUniqueFileName(
-      Directory(destinationFolder),
+    return destinationFolderIndex.resolveUniqueFileName(
+      destinationFolder,
       file.fileName,
     );
   }
@@ -1208,6 +1328,141 @@ class ImportEngine {
       return 'ファイルの読み書きに失敗したため取り込みを中断しました。';
     }
     return '取り込み中にエラーが発生したため中断しました。';
+  }
+}
+
+/// 保存先フォルダの一覧をキャッシュするインデックス
+///
+/// SMB などの遅い I/O 環境でも、フォルダ単位の一覧取得で
+/// per-file の exists 呼び出しを削減する。
+class _DestinationFolderIndex {
+  /// ロガー
+  final LoggingService _log;
+
+  /// フォルダパスごとのスナップショット
+  final Map<String, _DestinationFolderSnapshot> _snapshots = {};
+
+  /// 読み取り失敗済みのフォルダ
+  final Set<String> _failedFolders = {};
+
+  _DestinationFolderIndex(this._log);
+
+  /// フォルダ内に対象ファイルが存在するかを判定する
+  ///
+  /// スナップショットに存在しない場合は false を返すが、
+  /// [confirmWhenMissing] が true の場合は per-file の exists で再確認する。
+  Future<bool> containsFile(
+    String folderPath,
+    String fileName, {
+    required bool confirmWhenMissing,
+  }) async {
+    final snapshot = await _getSnapshot(folderPath);
+    if (snapshot != null) {
+      if (snapshot.fileNames.contains(fileName)) {
+        return true;
+      }
+      if (confirmWhenMissing) {
+        return File(p.join(folderPath, fileName)).exists();
+      }
+      return false;
+    }
+
+    return File(p.join(folderPath, fileName)).exists();
+  }
+
+  /// 指定されたフォルダ群のスナップショットを事前に作成する
+  Future<void> prewarm(Iterable<String> folderPaths) async {
+    for (final folderPath in folderPaths) {
+      await _getSnapshot(folderPath);
+    }
+  }
+
+  /// 既存ファイルとの重複を避けたファイル名を決定する
+  Future<String> resolveUniqueFileName(
+    String folderPath,
+    String fileName,
+  ) async {
+    final snapshot = await _getSnapshot(folderPath);
+    if (snapshot == null) {
+      return generateUniqueFileName(Directory(folderPath), fileName);
+    }
+
+    final baseName = getBaseName(fileName);
+    final extension = getExtension(fileName);
+    var candidate = fileName;
+    var counter = 1;
+
+    while (snapshot.fileNames.contains(candidate)) {
+      candidate = '$baseName ($counter)$extension';
+      counter++;
+
+      // 無限ループ防止（通常は到達しない）
+      if (counter > 10000) {
+        throw Exception('Failed to generate unique file name for: $fileName');
+      }
+    }
+
+    return candidate;
+  }
+
+  /// フォルダ一覧のスナップショットを取得する
+  Future<_DestinationFolderSnapshot?> _getSnapshot(
+    String folderPath,
+  ) async {
+    final cached = _snapshots[folderPath];
+    if (cached != null) {
+      return cached;
+    }
+    if (_failedFolders.contains(folderPath)) {
+      return null;
+    }
+
+    final directory = Directory(folderPath);
+    final isDirectoryExists = await directory.exists();
+    if (!isDirectoryExists) {
+      final snapshot = _DestinationFolderSnapshot.empty();
+      _snapshots[folderPath] = snapshot;
+      return snapshot;
+    }
+
+    try {
+      final fileNames = <String>{};
+      await for (final entity in directory.list(followLinks: false)) {
+        if (entity is File) {
+          fileNames.add(p.basename(entity.path));
+        }
+      }
+      final snapshot = _DestinationFolderSnapshot(
+        fileNames: fileNames,
+      );
+      _snapshots[folderPath] = snapshot;
+      return snapshot;
+    } catch (ex) {
+      _failedFolders.add(folderPath);
+      _log.warning(
+        'Failed to list destination folder, falling back to per-file checks.',
+        tag: 'ImportEngine',
+        error: ex,
+      );
+      return null;
+    }
+  }
+}
+
+/// 保存先フォルダのスナップショット
+class _DestinationFolderSnapshot {
+  /// ファイル名一覧
+  final Set<String> fileNames;
+
+  const _DestinationFolderSnapshot({
+    required this.fileNames,
+  });
+
+  /// 空のスナップショットを生成する
+  factory _DestinationFolderSnapshot.empty() {
+    return const _DestinationFolderSnapshot(
+      fileNames: <String>{},
+    );
   }
 }
 

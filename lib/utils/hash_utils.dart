@@ -75,9 +75,25 @@ Future<FileLightweightSignature> computeFileLightweightSignature(
 
   final raf = await file.open();
   try {
-    final headData = await _readFileChunk(raf, headOffset, headSize);
-    final middleData = await _readFileChunk(raf, middleOffset, middleSize);
-    final tailData = await _readFileChunk(raf, tailOffset, tailSize);
+    final chunkCache = <String, Uint8List>{};
+    final headData = await _readFileChunkWithCache(
+      raf,
+      headOffset,
+      headSize,
+      chunkCache,
+    );
+    final middleData = await _readFileChunkWithCache(
+      raf,
+      middleOffset,
+      middleSize,
+      chunkCache,
+    );
+    final tailData = await _readFileChunkWithCache(
+      raf,
+      tailOffset,
+      tailSize,
+      chunkCache,
+    );
 
     return FileLightweightSignature(
       chunkSize: safeChunkSize,
@@ -103,6 +119,35 @@ Future<Uint8List> _readFileChunk(
   await raf.setPosition(offset);
   final data = await raf.read(size);
   return data;
+}
+
+/// キャッシュを利用してファイルチャンクを読み取る
+///
+/// 同一オフセットの読み取りを再利用し、I/O 回数を減らす。
+Future<Uint8List> _readFileChunkWithCache(
+  RandomAccessFile raf,
+  int offset,
+  int size,
+  Map<String, Uint8List> cache,
+) async {
+  if (size <= 0) {
+    return Uint8List(0);
+  }
+
+  final cacheKey = _buildChunkCacheKey(offset, size);
+  final cached = cache[cacheKey];
+  if (cached != null) {
+    return cached;
+  }
+
+  final data = await _readFileChunk(raf, offset, size);
+  cache[cacheKey] = data;
+  return data;
+}
+
+/// チャンクキャッシュのキーを生成する
+String _buildChunkCacheKey(int offset, int size) {
+  return '$offset:$size';
 }
 
 /// ストリーミングコピーしながらハッシュを計算するクラス
