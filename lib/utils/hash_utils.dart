@@ -152,8 +152,9 @@ String _buildChunkCacheKey(int offset, int size) {
 
 /// ストリーミングコピーしながらハッシュを計算するクラス
 ///
-/// ファイルコピーとハッシュ計算を同時に行い、
-/// 二重読み取りを回避して I/O を最適化する。
+/// RandomAccessFile を使用してファイルコピーとハッシュ計算を同時に行う。
+/// 累計バイト数に基づいて定期的に fsync を呼び、OS キャッシュのバースト書き込みを軽減する。
+/// これにより HDD への書き込み時の I/O パターンが安定し、進捗表示と実際の書き込みが同期しやすくなる。
 class StreamingCopyWithHash {
   /// コピー元ファイル
   final File source;
@@ -164,6 +165,18 @@ class StreamingCopyWithHash {
   /// 進捗コールバック（コピー済みバイト数を通知）
   final void Function(int bytesCopied)? onProgress;
 
+  /// 読み込みバッファサイズ（256KB）
+  /// 大きいファイル（RAW: 50-60MB、動画: 100MB+）に適したサイズ。
+  static const int _readBufferSize = 256 * 1024;
+
+  /// fsync を呼ぶ累計バイト数のしきい値（64MB）
+  /// RAW 1-2 枚、JPEG 10 枚程度で fsync が呼ばれる頻度。
+  /// HDD のシーケンシャル書き込みを維持しつつ、OS キャッシュの溢れを防ぐバランス。
+  static const int _fsyncThresholdBytes = 64 * 1024 * 1024;
+
+  /// 現在の累計書き込みバイト数（複数ファイル間で共有）
+  static int _pendingBytes = 0;
+
   StreamingCopyWithHash({
     required this.source,
     required this.destination,
@@ -172,6 +185,8 @@ class StreamingCopyWithHash {
 
   /// コピーを実行し、計算したハッシュを返す
   ///
+  /// RandomAccessFile を使用して明示的に書き込みを待機し、
+  /// 累計バイト数がしきい値を超えたら fsync を呼んでディスクに書き出す。
   /// コピー中に [onProgress] で進捗を通知する。
   /// コピー失敗時は例外をスローする。
   Future<String> execute() async {
@@ -184,30 +199,57 @@ class StreamingCopyWithHash {
       await destDir.create(recursive: true);
     }
 
-    // コピー先ファイルを開く
-    final sink = destination.openWrite();
+    // RandomAccessFile でコピー元・コピー先を開く
+    final sourceRaf = await source.open(mode: FileMode.read);
+    final destRaf = await destination.open(mode: FileMode.write);
 
     try {
-      await for (final chunk in source.openRead()) {
-        final uint8Chunk = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+      final buffer = Uint8List(_readBufferSize);
 
-        // ファイルに書き込み
-        sink.add(uint8Chunk);
-        hashState.update(uint8Chunk);
+      while (true) {
+        // チャンクを読み込み
+        final bytesRead = await sourceRaf.readInto(buffer);
+        if (bytesRead == 0) {
+          break;
+        }
 
-        totalBytesCopied += uint8Chunk.length;
+        // 実際に読み込んだ分だけのビューを作成
+        final chunk = bytesRead == buffer.length ? buffer : Uint8List.sublistView(buffer, 0, bytesRead);
 
+        // ファイルに書き込み（await で完了を待機）
+        await destRaf.writeFrom(chunk);
+        hashState.update(chunk);
+
+        totalBytesCopied += bytesRead;
+        _pendingBytes += bytesRead;
+
+        // 進捗通知
         if (onProgress != null) {
           onProgress!(totalBytesCopied);
         }
+
+        // 累計バイト数がしきい値を超えたら fsync を呼ぶ
+        if (_pendingBytes >= _fsyncThresholdBytes) {
+          await destRaf.flush();
+          _pendingBytes = 0;
+        }
       }
 
-      await sink.flush();
+      // ファイル末尾で最終フラッシュ（ただし累計リセットはしない、次のファイルで合算）
+      await destRaf.flush();
     } finally {
-      await sink.close();
+      await sourceRaf.close();
+      await destRaf.close();
     }
 
     return hashState.digestString().padLeft(16, '0');
+  }
+
+  /// 取り込み完了時に累計をリセットする
+  ///
+  /// 取り込みセッションの終了時に呼び出し、次回の取り込みに備える。
+  static void resetPendingBytes() {
+    _pendingBytes = 0;
   }
 }
 

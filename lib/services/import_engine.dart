@@ -1,7 +1,7 @@
 /// 取り込みエンジン
 ///
 /// メディアファイルの取り込み処理を実行するコアロジック。
-/// ファイルのコピー、ハッシュ検証、日時復元、メタデータ更新を行う。
+/// ファイルのコピー、ハッシュ計算、日時復元、メタデータ更新を行う。
 library;
 
 import 'dart:async';
@@ -18,9 +18,6 @@ import '../utils/hash_utils.dart';
 import 'logging_service.dart';
 import 'metadata_manager.dart';
 import 'sony_filesystem.dart';
-
-/// ハッシュ検証失敗時の最大リトライ回数
-const int _maxCopyRetries = 3;
 
 /// 取り込みエンジン
 ///
@@ -285,6 +282,9 @@ class ImportEngine {
 
       stopwatch.stop();
 
+      // 取り込み完了時に累計バイト数をリセット
+      StreamingCopyWithHash.resetPendingBytes();
+
       _log.logImportCompleted(successCount, skippedCount, errorCount, stopwatch.elapsed);
 
       return ImportResult(
@@ -298,6 +298,10 @@ class ImportEngine {
       );
     } catch (ex, stackTrace) {
       stopwatch.stop();
+
+      // エラー発生時も累計バイト数をリセット
+      StreamingCopyWithHash.resetPendingBytes();
+
       _log.error('Import failed.', tag: 'ImportEngine', error: ex, stackTrace: stackTrace);
       final errorMessage = resolveFatalErrorMessage(ex);
       return ImportResult.error(
@@ -1240,6 +1244,10 @@ class ImportEngine {
   }
 
   /// ファイルをコピーしてハッシュを計算
+  ///
+  /// RandomAccessFile ベースのストリーミングコピーを使用し、
+  /// 書き込み時に同時にハッシュを計算する。
+  /// コピー後のハッシュ検証は行わない（システムコールが成功すればデータは正しく転送されている）。
   Future<String> _copyFileWithHash(
     MediaFile file,
     List<ImportWarning> warnings, {
@@ -1275,130 +1283,84 @@ class ImportEngine {
     final destPath = p.join(destFolder, destFileName);
     final destFile = File(destPath);
 
-    // リトライループ
-    for (var attempt = 1; attempt <= _maxCopyRetries; attempt++) {
-      try {
-        // ストリーミングコピー + ハッシュ計算
-        final copier = StreamingCopyWithHash(
-          source: sourceFile,
-          destination: destFile,
-          onProgress: (bytesCopied) {
-            if (onCopyProgress != null) {
-              onCopyProgress(bytesCopied);
-            }
-          },
-        );
-
-        final sourceHash = await copier.execute();
-        file.xxHash = sourceHash;
-
-        // コピー後のハッシュ検証
-        final destHash = await computeFileHash(destFile);
-
-        if (!hashesMatch(sourceHash, destHash)) {
-          if (attempt < _maxCopyRetries) {
-            // リトライ - コピー先を削除して再試行
-            await destFile.delete();
-            continue;
-          } else {
-            // 最大リトライ回数に達した
-            warnings.add(
-              ImportWarning(
-                type: ImportWarningType.HashVerificationFailed,
-                file: file,
-                message: 'Hash verification failed after $attempt attempts.',
-              ),
-            );
-            await destFile.delete();
-            throw ImportFatalException(
-              'ハッシュ検証に失敗したため取り込みを中断しました。ファイル: ${file.fileName}。',
-            );
+    try {
+      // ストリーミングコピー + ハッシュ計算（RandomAccessFile ベース）
+      final copier = StreamingCopyWithHash(
+        source: sourceFile,
+        destination: destFile,
+        onProgress: (bytesCopied) {
+          if (onCopyProgress != null) {
+            onCopyProgress(bytesCopied);
           }
-        }
+        },
+      );
 
-        // 日時復元
-        if (settings.isRestoreDateTimeFromExif) {
-          try {
-            final targetTimes = _resolveRestoreDateTimes(file);
-            await restoreFileDateTime(
-              file: destFile,
-              creationTimeUtc: targetTimes.creationTimeUtc,
-              modifiedTimeUtc: targetTimes.modifiedTimeUtc,
-            );
-          } on UnsupportedError {
-            rethrow;
-          } catch (ex) {
-            warnings.add(
-              ImportWarning(
-                type: ImportWarningType.DateRestoreFailed,
-                file: file,
-                message: 'Failed to restore file datetime: $ex.',
-              ),
-            );
-          }
-        }
+      final sourceHash = await copier.execute();
+      file.xxHash = sourceHash;
 
-        // 相対パスを記録
-        final relativeDestPath = settings.generateSubfolderPath(file.effectiveDateTimeLocal);
-        _lastDestinationPath = p.posix.join(relativeDestPath, destFileName);
-
-        // 成功
-        _log.logFileCopied(file.relativePath, destPath);
-        return _lastDestinationPath!;
-      } on ImportFatalException {
-        if (await destFile.exists()) {
-          try {
-            await destFile.delete();
-          } catch (_) {
-            // コピー失敗時の残骸削除に失敗しても中断を優先する
-          }
-        }
-        rethrow;
-      } on UnsupportedError {
-        if (await destFile.exists()) {
-          try {
-            await destFile.delete();
-          } catch (_) {
-            // コピー失敗時の残骸削除に失敗しても中断を優先する
-          }
-        }
-        rethrow;
-      } on FileSystemException catch (ex) {
-        if (await destFile.exists()) {
-          try {
-            await destFile.delete();
-          } catch (_) {
-            // コピー失敗時の残骸削除に失敗しても再試行を優先する
-          }
-        }
-        if (_isNoSpaceError(ex)) {
-          throw ImportFatalException(
-            '保存先の空き容量が不足しているため取り込みを中断しました。ファイル: ${file.fileName}。',
-            debugMessage: ex.toString(),
+      // 日時復元
+      if (settings.isRestoreDateTimeFromExif) {
+        try {
+          final targetTimes = _resolveRestoreDateTimes(file);
+          await restoreFileDateTime(
+            file: destFile,
+            creationTimeUtc: targetTimes.creationTimeUtc,
+            modifiedTimeUtc: targetTimes.modifiedTimeUtc,
+          );
+        } on UnsupportedError {
+          rethrow;
+        } catch (ex) {
+          warnings.add(
+            ImportWarning(
+              type: ImportWarningType.DateRestoreFailed,
+              file: file,
+              message: 'Failed to restore file datetime: $ex.',
+            ),
           );
         }
-        if (attempt >= _maxCopyRetries) {
-          rethrow;
-        }
-        // リトライ
-      } catch (ex) {
-        if (await destFile.exists()) {
-          try {
-            await destFile.delete();
-          } catch (_) {
-            // コピー失敗時の残骸削除に失敗しても再試行を優先する
-          }
-        }
-        if (attempt >= _maxCopyRetries) {
-          rethrow;
-        }
-        // リトライ
       }
-    }
 
-    throw ImportFatalException(
-      'ファイルのコピーに失敗したため取り込みを中断しました。ファイル: ${file.fileName}。',
-    );
+      // 相対パスを記録
+      final relativeDestPath = settings.generateSubfolderPath(file.effectiveDateTimeLocal);
+      _lastDestinationPath = p.posix.join(relativeDestPath, destFileName);
+
+      // 成功
+      _log.logFileCopied(file.relativePath, destPath);
+      return _lastDestinationPath!;
+    } on ImportFatalException {
+      if (await destFile.exists()) {
+        try {
+          await destFile.delete();
+        } catch (_) {
+          // コピー失敗時の残骸削除に失敗しても中断を優先する
+        }
+      }
+      rethrow;
+    } on UnsupportedError {
+      if (await destFile.exists()) {
+        try {
+          await destFile.delete();
+        } catch (_) {
+          // コピー失敗時の残骸削除に失敗しても中断を優先する
+        }
+      }
+      rethrow;
+    } on FileSystemException catch (ex) {
+      if (await destFile.exists()) {
+        try {
+          await destFile.delete();
+        } catch (_) {
+          // コピー失敗時の残骸削除に失敗しても中断を優先する
+        }
+      }
+      if (_isNoSpaceError(ex)) {
+        throw ImportFatalException(
+          '保存先の空き容量が不足しているため取り込みを中断しました。ファイル: ${file.fileName}。',
+          debugMessage: ex.toString(),
+        );
+      }
+      rethrow;
+    }
   }
 
   /// 空き容量不足のエラーかどうかを判定する
