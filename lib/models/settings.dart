@@ -284,7 +284,7 @@ class WindowSettings {
   final bool isMaximized;
 
   WindowSettings({
-    this.width = 640,
+    this.width = 650,
     this.height = 700,
     this.positionX,
     this.positionY,

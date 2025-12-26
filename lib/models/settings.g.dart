@@ -55,7 +55,7 @@ const _$DateSeparatorEnumMap = {
 };
 
 WindowSettings _$WindowSettingsFromJson(Map<String, dynamic> json) => WindowSettings(
-  width: (json['width'] as num?)?.toDouble() ?? 640,
+  width: (json['width'] as num?)?.toDouble() ?? 650,
   height: (json['height'] as num?)?.toDouble() ?? 700,
   positionX: (json['positionX'] as num?)?.toDouble(),
   positionY: (json['positionY'] as num?)?.toDouble(),
