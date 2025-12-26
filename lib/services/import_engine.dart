@@ -684,11 +684,61 @@ class ImportEngine {
       final destinationFolder = _getDestinationFolder(candidate.file);
       destinationFoldersForCandidates.add(destinationFolder);
     }
-    await destinationFolderIndex.prewarm(destinationFoldersForCandidates);
+    if (destinationFoldersForCandidates.isNotEmpty && onProgress != null) {
+      onProgress(
+        0,
+        destinationFoldersForCandidates.length,
+        null,
+        '保存先フォルダを確認中...',
+      );
+    }
+    await destinationFolderIndex.prewarm(
+      destinationFoldersForCandidates,
+      onProgress: (processedCount, totalCount, folderPath) {
+        final shouldReportUi = processedCount % progressUiInterval == 0 || processedCount == totalCount;
+        final shouldReportLog = processedCount % progressLogInterval == 0 || processedCount == totalCount;
+        if (onProgress != null && shouldReportUi) {
+          onProgress(
+            processedCount,
+            totalCount,
+            folderPath,
+            '保存先フォルダを確認中...',
+          );
+        }
+        if (shouldReportLog) {
+          _log.debug(
+            'Destination folder prewarm progress: $processedCount/$totalCount (last: ${folderPath ?? 'unknown'}).',
+            tag: 'ImportEngine',
+          );
+        }
+      },
+    );
 
+    final totalResolvedCandidates = resolvedCandidates.length;
+    var resolvedCandidateIndex = 0;
     for (final candidate in resolvedCandidates) {
       if (_isCancelled) {
         throw ImportCancelledException();
+      }
+
+      resolvedCandidateIndex++;
+      final shouldReportUi =
+          resolvedCandidateIndex % progressUiInterval == 0 || resolvedCandidateIndex == totalResolvedCandidates;
+      final shouldReportLog =
+          resolvedCandidateIndex % progressLogInterval == 0 || resolvedCandidateIndex == totalResolvedCandidates;
+      if (onProgress != null && shouldReportUi) {
+        onProgress(
+          resolvedCandidateIndex,
+          totalResolvedCandidates,
+          candidate.file.relativePath,
+          '保存先の重複を確認中...',
+        );
+      }
+      if (shouldReportLog) {
+        _log.debug(
+          'Destination check progress: $resolvedCandidateIndex/$totalResolvedCandidates (last: ${candidate.file.relativePath}).',
+          tag: 'ImportEngine',
+        );
       }
 
       if (candidate.needsDestinationCheck) {
@@ -1371,9 +1421,19 @@ class _DestinationFolderIndex {
   }
 
   /// 指定されたフォルダ群のスナップショットを事前に作成する
-  Future<void> prewarm(Iterable<String> folderPaths) async {
-    for (final folderPath in folderPaths) {
+  Future<void> prewarm(
+    Iterable<String> folderPaths, {
+    void Function(int processedCount, int totalCount, String? folderPath)? onProgress,
+  }) async {
+    final folderList = folderPaths.toList();
+    final totalCount = folderList.length;
+    var processedCount = 0;
+    for (final folderPath in folderList) {
       await _getSnapshot(folderPath);
+      processedCount++;
+      if (onProgress != null) {
+        onProgress(processedCount, totalCount, folderPath);
+      }
     }
   }
 
