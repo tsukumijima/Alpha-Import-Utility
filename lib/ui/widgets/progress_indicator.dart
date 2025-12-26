@@ -39,7 +39,11 @@ class ImportProgressIndicator extends StatelessWidget {
 
   /// 全体進捗を構築
   Widget _buildOverallProgress(BuildContext context, ThemeData theme) {
+    // 準備フェーズか取り込みフェーズかで表示を切り替え
+    final isPreparation = progress.importPhase.isPreparationPhase;
     final isIndeterminate = progress.totalCount == 0;
+
+    // 左側のラベル: スキャン中パスがあればそれを表示、なければ phase テキストを表示
     final scanPath = progress.scanCurrentPath;
     final leftLabel = scanPath != null && scanPath.isNotEmpty ? scanPath : progress.phase;
 
@@ -50,17 +54,20 @@ class ImportProgressIndicator extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              leftLabel.isEmpty ? 'インポート中...' : leftLabel,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontSize: 15,
-                fontWeight: FontWeight.normal,
+            Expanded(
+              child: Text(
+                leftLabel.isEmpty ? progress.importPhase.statusText : leftLabel,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.normal,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
+            const SizedBox(width: 12),
             Text(
-              progress.progressText,
+              _getProgressText(isPreparation),
               style: theme.textTheme.titleMedium?.copyWith(
                 color: theme.colorScheme.primary,
                 fontSize: 15,
@@ -90,6 +97,20 @@ class ImportProgressIndicator extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// 進捗テキストを取得
+  String _getProgressText(bool isPreparation) {
+    if (progress.totalCount == 0) {
+      // totalCount が 0 の場合はスキャン中
+      return progress.processedCount > 0 ? 'スキャン中（${progress.processedCount} 件）' : 'スキャン中...';
+    }
+    if (isPreparation) {
+      // 準備フェーズ: 処理済み/総数 件
+      return '${progress.processedCount} / ${progress.totalCount} 件';
+    }
+    // 取り込みフェーズ: 処理済み/総数 件
+    return '${progress.processedCount} / ${progress.totalCount} 件';
   }
 
   /// 現在のファイル進捗を構築

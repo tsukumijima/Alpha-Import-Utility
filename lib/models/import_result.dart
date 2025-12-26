@@ -505,8 +505,100 @@ class ImportPlan {
   int get targetCount => items.length;
 }
 
+/// 取り込み処理のフェーズ
+///
+/// ImportEngine の各処理段階を表す。UI はこの値に基づいて
+/// ダイアログタイトルやステータステキストを決定する。
+enum ImportPhase {
+  /// 初期化中（エンジン起動直後）
+  Initializing,
+
+  /// SD カード構造の検証中
+  ValidatingSDCard,
+
+  /// 書き込み可能性の確認中
+  CheckingWritePermission,
+
+  /// メディアファイルのスキャン中
+  ScanningMediaFiles,
+
+  /// 取り込み対象の判定中（メタデータ照合）
+  DeterminingTargets,
+
+  /// EXIF / メタデータの解析中
+  ParsingExif,
+
+  /// 保存先フォルダの確認中
+  CheckingDestination,
+
+  /// ディスク容量の確認中
+  CheckingDiskSpace,
+
+  /// ファイル取り込み中（実際のコピー処理）
+  Importing,
+}
+
+/// ImportPhase の拡張メソッド
+extension ImportPhaseExtension on ImportPhase {
+  /// ダイアログタイトル用のテキストを取得
+  String get dialogTitle {
+    switch (this) {
+      case ImportPhase.Initializing:
+        return '準備中...';
+      case ImportPhase.ValidatingSDCard:
+        return 'SD カードを検証中...';
+      case ImportPhase.CheckingWritePermission:
+        return 'SD カードを検証中...';
+      case ImportPhase.ScanningMediaFiles:
+        return 'メディアをスキャン中...';
+      case ImportPhase.DeterminingTargets:
+        return '取り込み対象を判定中...';
+      case ImportPhase.ParsingExif:
+        return 'EXIF を解析中...';
+      case ImportPhase.CheckingDestination:
+        return '保存先を確認中...';
+      case ImportPhase.CheckingDiskSpace:
+        return '容量を確認中...';
+      case ImportPhase.Importing:
+        return '取り込み中...';
+    }
+  }
+
+  /// ステータステキストを取得
+  String get statusText {
+    switch (this) {
+      case ImportPhase.Initializing:
+        return '準備中...';
+      case ImportPhase.ValidatingSDCard:
+        return 'SD カード構造を検証中...';
+      case ImportPhase.CheckingWritePermission:
+        return '書き込み可能性を確認中...';
+      case ImportPhase.ScanningMediaFiles:
+        return 'スキャン中...';
+      case ImportPhase.DeterminingTargets:
+        return '取り込み対象を判定中...';
+      case ImportPhase.ParsingExif:
+        return 'EXIF を解析中...';
+      case ImportPhase.CheckingDestination:
+        return '保存先を確認中...';
+      case ImportPhase.CheckingDiskSpace:
+        return '容量を確認中...';
+      case ImportPhase.Importing:
+        return 'コピー中...';
+    }
+  }
+
+  /// このフェーズが準備段階か（実際のファイルコピー前）
+  bool get isPreparationPhase {
+    return this != ImportPhase.Importing;
+  }
+}
+
 /// 取り込み進捗の状態
 class ImportProgress {
+  /// 現在の処理フェーズ
+  final ImportPhase importPhase;
+
   /// 現在処理中のファイル
   final MediaFile? currentFile;
 
@@ -525,7 +617,7 @@ class ImportProgress {
   /// 現在のファイルの総バイト数
   final int currentFileTotalBytes;
 
-  /// 処理フェーズの説明
+  /// 処理フェーズの説明（詳細な説明用、importPhase と併用）
   final String phase;
 
   /// スキャン中の現在ファイルパス
@@ -535,6 +627,7 @@ class ImportProgress {
   final String? currentDestinationPath;
 
   ImportProgress({
+    required this.importPhase,
     this.currentFile,
     required this.processedCount,
     required this.totalCount,
@@ -548,7 +641,12 @@ class ImportProgress {
 
   /// 初期状態を作成
   factory ImportProgress.initial() {
-    return ImportProgress(processedCount: 0, totalCount: 0, phase: 'スキャン中...');
+    return ImportProgress(
+      importPhase: ImportPhase.Initializing,
+      processedCount: 0,
+      totalCount: 0,
+      phase: '準備中...',
+    );
   }
 
   /// スキャン中の進捗を作成
@@ -557,6 +655,7 @@ class ImportProgress {
     String? scanCurrentPath,
   }) {
     return ImportProgress(
+      importPhase: ImportPhase.ScanningMediaFiles,
       processedCount: processedCount,
       totalCount: 0,
       phase: 'スキャン中...',
@@ -566,12 +665,14 @@ class ImportProgress {
 
   /// 取り込み対象の確定中の進捗を作成
   factory ImportProgress.preparingTargets({
+    required ImportPhase importPhase,
     required int processedCount,
     required int totalCount,
     String? currentPath,
     String phase = '取り込み対象を確定中...',
   }) {
     return ImportProgress(
+      importPhase: importPhase,
       processedCount: processedCount,
       totalCount: totalCount,
       phase: phase,
@@ -599,6 +700,7 @@ class ImportProgress {
     String? destinationPath,
   }) {
     return ImportProgress(
+      importPhase: ImportPhase.Importing,
       currentFile: file,
       processedCount: processedCount,
       totalCount: totalCount,
@@ -615,6 +717,7 @@ class ImportProgress {
   ImportProgress updateFileProgress(int copiedBytes) {
     final progress = currentFileTotalBytes > 0 ? copiedBytes / currentFileTotalBytes : 0.0;
     return ImportProgress(
+      importPhase: importPhase,
       currentFile: currentFile,
       processedCount: processedCount,
       totalCount: totalCount,
@@ -630,6 +733,7 @@ class ImportProgress {
   /// ファイル処理完了
   ImportProgress completeFile() {
     return ImportProgress(
+      importPhase: importPhase,
       currentFile: null,
       processedCount: processedCount + 1,
       totalCount: totalCount,

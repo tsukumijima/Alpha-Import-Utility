@@ -279,10 +279,8 @@ class _ImportDialogState extends State<ImportDialog> {
 
   /// 進捗表示を構築
   Widget _buildProgress() {
-    final statusText = _phase == _ImportDialogPhase.preparing
-        ? _progress.phase
-        : (_progress.totalCount == 0 ? 'スキャン中' : '取り込み中');
-    final formattedStatusText = _formatStatusText(statusText);
+    // ImportProgress の importPhase からステータステキストを取得
+    final statusText = _progress.importPhase.statusText;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -290,7 +288,7 @@ class _ImportDialogState extends State<ImportDialog> {
       children: [
         // デバイス情報
         Text(
-          '${widget.device.displayName} から$formattedStatusText',
+          '${widget.device.displayName} から$statusText',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Colors.white70,
           ),
@@ -345,32 +343,22 @@ class _ImportDialogState extends State<ImportDialog> {
 
   /// ダイアログタイトルを取得
   String _getDialogTitle() {
-    if (_phase == _ImportDialogPhase.preparing) {
-      return _progress.phase.isNotEmpty ? _progress.phase : 'スキャン中...';
-    }
+    // プレビュー画面
     if (_phase == _ImportDialogPhase.preview) {
       return '取り込み前プレビュー';
     }
-    if (_phase == _ImportDialogPhase.importing) {
-      return '取り込み中...';
+    // 完了画面
+    if (_phase == _ImportDialogPhase.completed) {
+      if (_result?.wasCancelled == true) {
+        return '取り込み中断';
+      }
+      if ((_result?.errorCount ?? 0) > 0) {
+        return '取り込み中断';
+      }
+      return '取り込み完了';
     }
-    if (_result?.wasCancelled == true) {
-      return '取り込み中断';
-    }
-    if ((_result?.errorCount ?? 0) > 0) {
-      return '取り込み中断';
-    }
-    return '取り込み完了';
-  }
-
-  String _formatStatusText(String statusText) {
-    if (statusText.isEmpty) {
-      return 'スキャン中...';
-    }
-    if (statusText.endsWith('...')) {
-      return statusText;
-    }
-    return '$statusText...';
+    // 準備中または取り込み中: ImportProgress の importPhase に基づいてタイトルを表示
+    return _progress.importPhase.dialogTitle;
   }
 
   /// キャンセル確認メッセージを取得

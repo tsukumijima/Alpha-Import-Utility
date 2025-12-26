@@ -112,6 +112,14 @@ class ImportEngine {
 
       // Phase 5: 容量チェック
       _log.debug('Phase 5: Checking disk space.', tag: 'ImportEngine');
+      _notifyProgress(
+        ImportProgress(
+          importPhase: ImportPhase.CheckingDiskSpace,
+          processedCount: 0,
+          totalCount: 0,
+          phase: '保存先の容量を確認中...',
+        ),
+      );
       final totalSize = importPlan.totalSize;
       final availableSpace = await getAvailableDiskSpace(settings.destinationFolder);
       _log.debug(
@@ -137,6 +145,7 @@ class ImportEngine {
       // Phase 6: 各ファイルの取り込み処理
       _log.debug('Phase 6: Starting file import.', tag: 'ImportEngine');
       var progress = ImportProgress(
+        importPhase: ImportPhase.Importing,
         processedCount: 0,
         totalCount: importTargets.length,
         phase: '取り込み中...',
@@ -331,7 +340,14 @@ class ImportEngine {
       ..reset()
       ..start();
     _log.debug('Phase 1: Validating SD card structure.', tag: 'ImportEngine');
-    _notifyProgress(ImportProgress.scanning());
+    _notifyProgress(
+      ImportProgress(
+        importPhase: ImportPhase.ValidatingSDCard,
+        processedCount: 0,
+        totalCount: 0,
+        phase: 'SD カード構造を検証中...',
+      ),
+    );
 
     final validation = await _sonyFs.validate();
     if (!validation.isValid) {
@@ -355,6 +371,14 @@ class ImportEngine {
       ..reset()
       ..start();
     _log.debug('Phase 2: Checking write permission.', tag: 'ImportEngine');
+    _notifyProgress(
+      ImportProgress(
+        importPhase: ImportPhase.CheckingWritePermission,
+        processedCount: 0,
+        totalCount: 0,
+        phase: '書き込み可能性を確認中...',
+      ),
+    );
     final isWritable = await _metadataManager.isWritable();
     if (!isWritable) {
       _log.error('SD card is not writable.', tag: 'ImportEngine');
@@ -377,7 +401,12 @@ class ImportEngine {
       ..reset()
       ..start();
     _log.debug('Phase 3: Scanning media files.', tag: 'ImportEngine');
-    var scanProgress = ImportProgress.scanning();
+    var scanProgress = ImportProgress(
+      importPhase: ImportPhase.ScanningMediaFiles,
+      processedCount: 0,
+      totalCount: 0,
+      phase: 'メディアファイルをスキャン中...',
+    );
     _notifyProgress(scanProgress);
 
     late final SonyFilesystemScanResult scanResult;
@@ -385,8 +414,11 @@ class ImportEngine {
       scanResult = await _sonyFs.scanMediaFiles(
         settings,
         onProgress: (processedCount, currentPath) {
-          scanProgress = ImportProgress.scanning(
+          scanProgress = ImportProgress(
+            importPhase: ImportPhase.ScanningMediaFiles,
             processedCount: processedCount,
+            totalCount: 0,
+            phase: 'メディアファイルをスキャン中...',
             scanCurrentPath: currentPath,
           );
           _notifyProgress(scanProgress);
@@ -420,6 +452,7 @@ class ImportEngine {
     _log.debug('Phase 4: Determining import targets.', tag: 'ImportEngine');
     if (mediaFiles.isNotEmpty) {
       scanProgress = ImportProgress.preparingTargets(
+        importPhase: ImportPhase.DeterminingTargets,
         processedCount: 0,
         totalCount: mediaFiles.length,
         phase: '取り込み対象を判定中...',
@@ -429,8 +462,9 @@ class ImportEngine {
     final plan = await _buildImportTargets(
       mediaFiles,
       warnings,
-      onProgress: (processedCount, totalCount, currentPath, phase) {
+      onProgress: (processedCount, totalCount, currentPath, phase, importPhase) {
         scanProgress = ImportProgress.preparingTargets(
+          importPhase: importPhase,
           processedCount: processedCount,
           totalCount: totalCount,
           currentPath: currentPath,
@@ -491,7 +525,8 @@ class ImportEngine {
   Future<({List<ImportPlanItem> items, int totalSize, int skippedCount})> _buildImportTargets(
     List<MediaFile> mediaFiles,
     List<ImportWarning> warnings, {
-    void Function(int processedCount, int totalCount, String? currentPath, String phase)? onProgress,
+    void Function(int processedCount, int totalCount, String? currentPath, String phase, ImportPhase importPhase)?
+    onProgress,
   }) async {
     final items = <ImportPlanItem>[];
     var totalSize = 0;
@@ -549,6 +584,7 @@ class ImportEngine {
           totalFiles,
           file.relativePath,
           '取り込み対象を判定中...',
+          ImportPhase.DeterminingTargets,
         );
       }
       if (shouldReportLog) {
@@ -660,7 +696,8 @@ class ImportEngine {
           totalCandidates,
           candidate.file.relativePath,
           // UI 表示上、英字と日本語の間に半角スペースを入れるため先頭スペースを維持する
-          ' EXIF を解析中...',
+          'EXIF を解析中...',
+          ImportPhase.ParsingExif,
         );
       }
       if (shouldReportLog) {
@@ -695,6 +732,7 @@ class ImportEngine {
         destinationFoldersForCandidates.length,
         null,
         '保存先フォルダを確認中...',
+        ImportPhase.CheckingDestination,
       );
     }
     await destinationFolderIndex.prewarm(
@@ -708,6 +746,7 @@ class ImportEngine {
             totalCount,
             folderPath,
             '保存先フォルダを確認中...',
+            ImportPhase.CheckingDestination,
           );
         }
         if (shouldReportLog) {
@@ -737,6 +776,7 @@ class ImportEngine {
           totalResolvedCandidates,
           candidate.file.relativePath,
           '保存先の重複を確認中...',
+          ImportPhase.CheckingDestination,
         );
       }
       if (shouldReportLog) {
