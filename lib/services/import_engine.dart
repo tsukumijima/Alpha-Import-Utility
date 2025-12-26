@@ -495,11 +495,11 @@ class ImportEngine {
     final candidates = <({MediaFile file, bool needsDestinationCheck})>[];
     final metadata = await _metadataManager.load();
     final recordBySourcePath = {
-      for (final record in metadata.files) _normalizeSourcePathForLookup(record.sourcePath): record,
+      for (final record in metadata.files) normalizeSourcePathForLookup(record.sourcePath): record,
     };
     final signatureCache = <String, FileLightweightSignature>{};
     final updatedRecords = <ImportedFileRecord>[];
-    final scannedPaths = mediaFiles.map((file) => _normalizeSourcePathForLookup(file.relativePath)).toSet();
+    final scannedPaths = mediaFiles.map((file) => normalizeSourcePathForLookup(file.relativePath)).toSet();
     const int progressLogInterval = 200;
     const int progressUiInterval = 1;
     final totalFiles = mediaFiles.length;
@@ -507,7 +507,7 @@ class ImportEngine {
 
     final recordsToRemove = <String>{};
     for (final record in metadata.files) {
-      final normalizedRecordPath = _normalizeSourcePathForLookup(record.sourcePath);
+      final normalizedRecordPath = normalizeSourcePathForLookup(record.sourcePath);
       if (_isSourcePathInScanScope(record.sourcePath) && !scannedPaths.contains(normalizedRecordPath)) {
         recordsToRemove.add(record.sourcePath);
       }
@@ -549,7 +549,7 @@ class ImportEngine {
       }
 
       // 取り込み済みかどうかを確認
-      final normalizedSourcePath = _normalizeSourcePathForLookup(file.relativePath);
+      final normalizedSourcePath = normalizeSourcePathForLookup(file.relativePath);
       final existingRecord = recordBySourcePath[normalizedSourcePath];
       if (existingRecord != null) {
         final normalizedDestinationPath = existingRecord.destinationPath.replaceAll('\\', '/');
@@ -758,16 +758,9 @@ class ImportEngine {
     );
   }
 
-  /// ソースパスを比較用に正規化する
-  ///
-  /// Windows のバックスラッシュを POSIX 形式に統一し、小文字化する。
-  String _normalizeSourcePathForLookup(String sourcePath) {
-    return sourcePath.replaceAll('\\', '/').toLowerCase();
-  }
-
   /// メタデータの削除対象かどうかを判定する
   bool _isSourcePathInScanScope(String sourcePath) {
-    final normalized = sourcePath.replaceAll('\\', '/').toLowerCase();
+    final normalized = normalizeSourcePathForLookup(sourcePath);
     if (normalized.startsWith('dcim/')) {
       return true;
     }

@@ -5,8 +5,8 @@ library;
 
 import 'dart:io';
 
-import 'package:path/path.dart' as p;
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
 import '../services/file_time_service.dart';
 import '../services/logging_service.dart';
@@ -168,6 +168,26 @@ String getDirectoryPath(String path) {
 /// [from] から [to] への相対パスを返す。
 String getRelativePath(String from, String to) {
   return p.relative(to, from: from).replaceAll('\\', '/');
+}
+
+/// ソースパスを比較用に正規化する
+///
+/// Windows のバックスラッシュを POSIX 形式に統一し、小文字化する。
+/// メタデータの検索や比較に使用する。
+///
+/// 引数:
+///   [sourcePath] 正規化するソースパス
+///
+/// 戻り値:
+///   正規化されたパス（バックスラッシュをスラッシュに変換し、小文字化）
+///
+/// 例:
+///   ```dart
+///   normalizeSourcePathForLookup('DCIM\\100MSDCF\\DSC00001.JPG')
+///   // => 'dcim/100msdcf/dsc00001.jpg'
+///   ```
+String normalizeSourcePathForLookup(String sourcePath) {
+  return sourcePath.replaceAll('\\', '/').toLowerCase();
 }
 
 /// OS 生成ファイルを判定する

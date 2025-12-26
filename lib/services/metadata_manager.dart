@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../models/import_result.dart';
+import '../utils/file_utils.dart';
 import 'logging_service.dart';
 
 /// メタデータファイルのパス定数
@@ -107,7 +108,7 @@ class MetadataManager {
       _metadata = ImportMetadata.fromJson(json);
       _lastLoadedModified = stat.modified;
       _recordBySourcePath = {
-        for (final record in _metadata!.files) _normalizeSourcePathForLookup(record.sourcePath): record,
+        for (final record in _metadata!.files) normalizeSourcePathForLookup(record.sourcePath): record,
       };
 
       _log.info(
@@ -177,7 +178,7 @@ class MetadataManager {
         _metadata = metadata;
         _lastLoadedModified = (await file.stat()).modified;
         _recordBySourcePath = {
-          for (final record in metadata.files) _normalizeSourcePathForLookup(record.sourcePath): record,
+          for (final record in metadata.files) normalizeSourcePathForLookup(record.sourcePath): record,
         };
 
         _log.info(
@@ -380,13 +381,6 @@ class MetadataManager {
     return '${time.year}${pad(time.month)}${pad(time.day)}_${pad(time.hour)}${pad(time.minute)}${pad(time.second)}';
   }
 
-  /// ソースパスを比較用に正規化する
-  ///
-  /// Windows のバックスラッシュを POSIX 形式に統一し、小文字化する。
-  String _normalizeSourcePathForLookup(String sourcePath) {
-    return sourcePath.replaceAll('\\', '/').toLowerCase();
-  }
-
   /// 古いロックファイルを検出して削除する
   ///
   /// 一定時間以上経過したロックは stale とみなし削除する。
@@ -457,7 +451,7 @@ class MetadataManager {
   /// 取り込み済みかどうかの判定に使用する。
   Future<ImportedFileRecord?> findRecord(String sourcePath) async {
     await load();
-    final normalizedSourcePath = _normalizeSourcePathForLookup(sourcePath);
+    final normalizedSourcePath = normalizeSourcePathForLookup(sourcePath);
     return _recordBySourcePath[normalizedSourcePath];
   }
 
