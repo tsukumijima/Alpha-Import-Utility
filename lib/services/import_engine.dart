@@ -696,7 +696,7 @@ class ImportEngine {
           totalCandidates,
           candidate.file.relativePath,
           // UI 表示上、英字と日本語の間に半角スペースを入れるため先頭スペースを維持する
-          'EXIF を解析中...',
+          ' EXIF を解析中...',
           ImportPhase.ParsingExif,
         );
       }
