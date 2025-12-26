@@ -155,6 +155,23 @@ String _buildChunkCacheKey(int offset, int size) {
 /// RandomAccessFile を使用してファイルコピーとハッシュ計算を同時に行う。
 /// 累計バイト数に基づいて定期的に fsync を呼び、OS キャッシュのバースト書き込みを軽減する。
 /// これにより HDD への書き込み時の I/O パターンが安定し、進捗表示と実際の書き込みが同期しやすくなる。
+///
+/// ## 累計バイト数の管理
+///
+/// このクラスは [_pendingBytes] という静的フィールドで、複数ファイル間の累計書き込みバイト数を管理する。
+/// 累計が [_fsyncThresholdBytes]（64MB）を超えると fsync を呼び、カウンタをリセットする。
+/// 各ファイルのコピー完了時には fsync を呼ぶが、累計カウンタはリセットしない（次のファイルで合算される）。
+///
+/// **重要**: 呼び出し元は取り込みセッション終了時に [resetPendingBytes] を呼び出す必要がある。
+/// これを忘れると、次回の取り込みで累計が引き継がれてしまう。
+/// 典型的な呼び出し元である `ImportEngine` では、`execute()` の完了時とエラー発生時の両方で
+/// `resetPendingBytes()` を呼び出している。
+///
+/// ## Isolate に関する注意
+///
+/// [_pendingBytes] は静的フィールドであり、Isolate 間で共有されない（各 Isolate が独自のコピーを持つ）。
+/// このアプリは単一 Isolate で動作するため問題ないが、複数 Isolate で並列コピーを行う場合は
+/// インスタンスレベルのカウンタか、明示的な同期機構が必要になる。
 class StreamingCopyWithHash {
   /// コピー元ファイル
   final File source;
@@ -166,15 +183,21 @@ class StreamingCopyWithHash {
   final void Function(int bytesCopied)? onProgress;
 
   /// 読み込みバッファサイズ（256KB）
+  ///
   /// 大きいファイル（RAW: 50-60MB、動画: 100MB+）に適したサイズ。
   static const int _readBufferSize = 256 * 1024;
 
   /// fsync を呼ぶ累計バイト数のしきい値（64MB）
+  ///
   /// RAW 1-2 枚、JPEG 10 枚程度で fsync が呼ばれる頻度。
   /// HDD のシーケンシャル書き込みを維持しつつ、OS キャッシュの溢れを防ぐバランス。
   static const int _fsyncThresholdBytes = 64 * 1024 * 1024;
 
-  /// 現在の累計書き込みバイト数（複数ファイル間で共有）
+  /// 現在の累計書き込みバイト数
+  ///
+  /// 複数ファイル間で共有される静的カウンタ。
+  /// [_fsyncThresholdBytes] を超えると fsync が呼ばれ、0 にリセットされる。
+  /// 取り込みセッション終了時に [resetPendingBytes] で明示的にリセットする必要がある。
   static int _pendingBytes = 0;
 
   StreamingCopyWithHash({

@@ -1283,6 +1283,9 @@ class ImportEngine {
     final destPath = p.join(destFolder, destFileName);
     final destFile = File(destPath);
 
+    // 成功フラグ（finally でのクリーンアップ判定用）
+    bool isSuccess = false;
+
     try {
       // ストリーミングコピー + ハッシュ計算（RandomAccessFile ベース）
       final copier = StreamingCopyWithHash(
@@ -1325,34 +1328,11 @@ class ImportEngine {
       _lastDestinationPath = p.posix.join(relativeDestPath, destFileName);
 
       // 成功
+      isSuccess = true;
       _log.logFileCopied(file.relativePath, destPath);
       return _lastDestinationPath!;
-    } on ImportFatalException {
-      if (await destFile.exists()) {
-        try {
-          await destFile.delete();
-        } catch (_) {
-          // コピー失敗時の残骸削除に失敗しても中断を優先する
-        }
-      }
-      rethrow;
-    } on UnsupportedError {
-      if (await destFile.exists()) {
-        try {
-          await destFile.delete();
-        } catch (_) {
-          // コピー失敗時の残骸削除に失敗しても中断を優先する
-        }
-      }
-      rethrow;
     } on FileSystemException catch (ex) {
-      if (await destFile.exists()) {
-        try {
-          await destFile.delete();
-        } catch (_) {
-          // コピー失敗時の残骸削除に失敗しても中断を優先する
-        }
-      }
+      // 空き容量不足の場合は専用の例外に変換
       if (_isNoSpaceError(ex)) {
         throw ImportFatalException(
           '保存先の空き容量が不足しているため取り込みを中断しました。ファイル: ${file.fileName}。',
@@ -1360,6 +1340,24 @@ class ImportEngine {
         );
       }
       rethrow;
+    } finally {
+      // 失敗時はコピー先の不完全なファイルを削除
+      if (!isSuccess) {
+        await _cleanupFailedCopy(destFile);
+      }
+    }
+  }
+
+  /// コピー失敗時に不完全なファイルを削除する
+  ///
+  /// 削除に失敗してもエラーを握りつぶし、元の例外の伝播を優先する。
+  Future<void> _cleanupFailedCopy(File destFile) async {
+    if (await destFile.exists()) {
+      try {
+        await destFile.delete();
+      } catch (_) {
+        // コピー失敗時の残骸削除に失敗しても元の例外伝播を優先する
+      }
     }
   }
 
