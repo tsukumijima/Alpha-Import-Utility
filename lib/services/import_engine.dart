@@ -492,6 +492,7 @@ class ImportEngine {
     final items = <ImportPlanItem>[];
     var totalSize = 0;
     var skippedCount = 0;
+    final appVersion = await _appVersionFuture;
     final candidates = <({MediaFile file, bool needsDestinationCheck})>[];
     final metadata = await _metadataManager.load();
     final recordBySourcePath = {
@@ -754,6 +755,15 @@ class ImportEngine {
           candidate.file.xxHash ??= await computeFileHash(File(candidate.file.absolutePath));
           final destHash = await computeFileHash(destFile);
           if (hashesMatch(candidate.file.xxHash!, destHash)) {
+            final subfolderPath = settings.generateSubfolderPath(candidate.file.effectiveDateTimeLocal);
+            final destinationRelativePath = p.posix.join(subfolderPath, candidate.file.fileName);
+            final record = await _buildSkippedRecord(
+              file: candidate.file,
+              destinationPath: destinationRelativePath,
+              appVersion: appVersion,
+              signatureCache: signatureCache,
+            );
+            updatedRecords.add(record);
             skippedCount++;
             continue;
           }
@@ -1025,6 +1035,44 @@ class ImportEngine {
       importedAt: record.importedAt,
       destinationPath: record.destinationPath,
       appVersion: record.appVersion,
+    );
+  }
+
+  /// スキップ済みファイルのレコードを構築する
+  ///
+  /// 保存先に同一ファイルが存在する場合、コピーを行わずにメタデータへ登録する。
+  Future<ImportedFileRecord> _buildSkippedRecord({
+    required MediaFile file,
+    required String destinationPath,
+    required String appVersion,
+    required Map<String, FileLightweightSignature> signatureCache,
+  }) async {
+    final sourceHash = file.xxHash ?? await computeFileHash(File(file.absolutePath));
+    file.xxHash = sourceHash;
+    FileLightweightSignature? signature;
+    try {
+      signature = await _getSignatureForFile(
+        file.absolutePath,
+        signatureCache,
+      );
+    } catch (ex) {
+      _log.warning(
+        'Failed to compute lightweight signature for skipped metadata.',
+        tag: 'ImportEngine',
+        error: ex,
+      );
+    }
+
+    return ImportedFileRecord(
+      sourcePath: file.relativePath,
+      xxHash: sourceHash,
+      sourceCreatedTimeUtcMs: file.sourceCreatedTimeUtcMs,
+      sourceModifiedTimeUtcMs: file.sourceModifiedTimeUtcMs,
+      fileSize: file.fileSize,
+      lightweightSignature: signature,
+      importedAt: DateTime.now().toUtc(),
+      destinationPath: destinationPath,
+      appVersion: appVersion,
     );
   }
 

@@ -57,6 +57,12 @@ class _ImportDialogState extends State<ImportDialog> {
   /// キャンセル確認中フラグ
   bool _isCancelConfirming = false;
 
+  /// 準備フェーズの処理時間
+  Duration _prepareDuration = Duration.zero;
+
+  /// 準備フェーズ計測用ストップウォッチ
+  final Stopwatch _prepareStopwatch = Stopwatch();
+
   @override
   void initState() {
     super.initState();
@@ -87,9 +93,14 @@ class _ImportDialogState extends State<ImportDialog> {
   /// 取り込みプランを準備
   Future<void> _prepareImportPlan() async {
     setState(() => _phase = _ImportDialogPhase.preparing);
+    _prepareStopwatch
+      ..reset()
+      ..start();
 
     try {
       final plan = await _engine!.prepareImportPlan();
+      _prepareStopwatch.stop();
+      _prepareDuration = _prepareStopwatch.elapsed;
 
       if (!mounted) {
         return;
@@ -104,7 +115,7 @@ class _ImportDialogState extends State<ImportDialog> {
             errorCount: 0,
             warnings: plan.warnings,
             importedFiles: [],
-            duration: Duration.zero,
+            duration: _prepareDuration,
           );
           _phase = _ImportDialogPhase.completed;
         });
@@ -116,12 +127,18 @@ class _ImportDialogState extends State<ImportDialog> {
         _phase = _ImportDialogPhase.preview;
       });
     } on ImportCancelledException {
+      _prepareStopwatch.stop();
       return;
     } catch (ex) {
+      _prepareStopwatch.stop();
+      _prepareDuration = _prepareStopwatch.elapsed;
       final errorMessage = _engine?.resolveFatalErrorMessage(ex) ?? '取り込み中にエラーが発生したため中断しました。';
       if (mounted) {
         setState(() {
-          _result = ImportResult.error(errorMessage: errorMessage);
+          _result = ImportResult.error(
+            errorMessage: errorMessage,
+            duration: _prepareDuration,
+          );
           _phase = _ImportDialogPhase.completed;
         });
       }
@@ -135,13 +152,29 @@ class _ImportDialogState extends State<ImportDialog> {
     setState(() => _phase = _ImportDialogPhase.importing);
 
     final result = await _engine!.execute(plan: plan);
+    final adjustedResult = plan == null ? result : _withAdjustedDuration(result, _prepareDuration + result.duration);
 
     if (mounted) {
       setState(() {
-        _result = result;
+        _result = adjustedResult;
         _phase = _ImportDialogPhase.completed;
       });
     }
+  }
+
+  /// 処理時間を上書きした結果を返す
+  ImportResult _withAdjustedDuration(ImportResult result, Duration duration) {
+    return ImportResult(
+      successCount: result.successCount,
+      skippedCount: result.skippedCount,
+      warningCount: result.warningCount,
+      errorCount: result.errorCount,
+      warnings: result.warnings,
+      importedFiles: result.importedFiles,
+      duration: duration,
+      wasCancelled: result.wasCancelled,
+      errorMessage: result.errorMessage,
+    );
   }
 
   /// キャンセルを要求
