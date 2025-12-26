@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/services.dart';
 
 import '../services/file_time_service.dart';
+import '../services/logging_service.dart';
 
 /// ファイル名から拡張子を除いたベース名を取得
 ///
@@ -199,7 +200,12 @@ Future<int?> getAvailableDiskSpace(String path) async {
   try {
     final resolvedPath = await _resolveDiskSpacePath(path);
     return await FileTimeService.instance.getAvailableDiskSpace(resolvedPath);
-  } catch (_) {
+  } catch (ex) {
+    LoggingService.instance.warning(
+      'Failed to read disk space.',
+      tag: 'FileUtils',
+      error: ex,
+    );
     return null;
   }
 }

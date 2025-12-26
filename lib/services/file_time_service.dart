@@ -51,9 +51,23 @@ class FileTimeService {
     }
 
     return (
-      creationTimeUtcMs: result['creationTimeUtcMs'] as int,
-      modifiedTimeUtcMs: result['modifiedTimeUtcMs'] as int,
+      creationTimeUtcMs: _readIntResultValue(result, 'creationTimeUtcMs', path),
+      modifiedTimeUtcMs: _readIntResultValue(result, 'modifiedTimeUtcMs', path),
     );
+  }
+
+  /// MethodChannel 結果から int 値を安全に取得する
+  ///
+  /// 期待した値がない場合は例外を投げる。
+  int _readIntResultValue(Map<Object?, Object?> result, String key, String path) {
+    final value = result[key];
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    throw Exception('Invalid "$key" value from platform for: $path');
   }
 
   /// ディスクの空き容量を取得する

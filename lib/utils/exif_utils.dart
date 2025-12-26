@@ -12,6 +12,9 @@ import 'package:xml/xml.dart';
 
 import 'timezone_utils.dart';
 
+/// 動画 XML のキャッシュ
+final Map<String, Map<String, File?>> _videoXmlCacheByDirectory = {};
+
 /// EXIF から読み取った日時情報
 class ExifDateTime {
   /// 撮影日時（EXIF DateTimeOriginal, カメラのローカル時刻）
@@ -328,6 +331,37 @@ Future<VideoDateTime?> readVideoXmlDateTime(
   }
 }
 
+/// 動画 XML のキャッシュを取得する
+Map<String, File?> _getVideoXmlCacheForDirectory(Directory directory) {
+  return _videoXmlCacheByDirectory.putIfAbsent(
+    directory.path,
+    () => <String, File?>{},
+  );
+}
+
+/// ディレクトリ内の動画 XML をスキャンしてキャッシュを更新する
+Future<void> _populateVideoXmlCache(
+  Directory directory,
+  Map<String, File?> cache,
+) async {
+  await for (final entity in directory.list()) {
+    if (entity is! File) {
+      continue;
+    }
+    final fileNameUpper = entity.uri.pathSegments.last.toUpperCase();
+    if (!fileNameUpper.endsWith('.XML')) {
+      continue;
+    }
+    final fileStemUpper = fileNameUpper.substring(0, fileNameUpper.length - 4);
+    final match = RegExp(r'^([A-Z0-9]+)M\d{2}$').firstMatch(fileStemUpper);
+    if (match == null) {
+      continue;
+    }
+    final baseName = match.group(1)!;
+    cache[baseName] = entity;
+  }
+}
+
 /// 動画ファイルに対応する XML ファイルのパスを取得
 ///
 /// [videoFile] から対応する XML ファイルのパスを推測する。
@@ -337,22 +371,19 @@ Future<VideoDateTime?> readVideoXmlDateTime(
 Future<File?> findVideoXmlFile(File videoFile) async {
   final videoName = videoFile.uri.pathSegments.last;
   final baseName = videoName.substring(0, videoName.lastIndexOf('.'));
+  final baseNameKey = baseName.toUpperCase();
 
   // Sony 動画の XML ファイル名パターン: {baseName}M01.XML
   // M01 は固定ではない可能性があるため、パターンマッチで探す
   final directory = videoFile.parent;
 
   try {
-    await for (final entity in directory.list()) {
-      if (entity is File) {
-        final fileName = entity.uri.pathSegments.last.toUpperCase();
-
-        // パターン: {baseName}M{数字2桁}.XML
-        if (fileName.startsWith(baseName.toUpperCase()) && fileName.endsWith('.XML') && fileName.contains('M')) {
-          return entity;
-        }
-      }
+    final cache = _getVideoXmlCacheForDirectory(directory);
+    if (!cache.containsKey(baseNameKey)) {
+      await _populateVideoXmlCache(directory, cache);
+      cache.putIfAbsent(baseNameKey, () => null);
     }
+    return cache[baseNameKey];
   } catch (_) {
     // ディレクトリ読み取りエラー
   }

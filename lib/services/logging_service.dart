@@ -35,6 +35,9 @@ class LoggingService {
   /// 初期化済みフラグ
   bool _initialized = false;
 
+  /// 保持するログファイルの最大数
+  static const int _maxLogFiles = 30;
+
   /// プライベートコンストラクタ
   LoggingService._();
 
@@ -65,6 +68,8 @@ class LoggingService {
       _logSink = _logFile!.openWrite(mode: FileMode.append);
 
       _initialized = true;
+
+      await _cleanupOldLogs(logDir, _logFile!.path);
 
       // 起動ログを出力
       info('Application started.');
@@ -144,6 +149,58 @@ class LoggingService {
       if (stackTrace != null) {
         _logSink!.writeln('  StackTrace:\n$stackTrace');
       }
+      if (level == LogLevel.error) {
+        _logSink!.flush();
+      }
+    }
+  }
+
+  /// 古いログファイルを削除して件数を制限する
+  ///
+  /// [currentLogPath] は削除対象から除外する。
+  Future<void> _cleanupOldLogs(Directory logDir, String currentLogPath) async {
+    try {
+      final logFiles = <({File file, DateTime modified})>[];
+      await for (final entity in logDir.list()) {
+        if (entity is! File) {
+          continue;
+        }
+        if (!entity.path.toLowerCase().endsWith('.log')) {
+          continue;
+        }
+        if (p.equals(entity.path, currentLogPath)) {
+          continue;
+        }
+        final stat = await entity.stat();
+        logFiles.add((file: entity, modified: stat.modified));
+      }
+
+      logFiles.sort((a, b) => b.modified.compareTo(a.modified));
+
+      final maxRemaining = _maxLogFiles - 1;
+      if (maxRemaining < 0 || logFiles.length <= maxRemaining) {
+        return;
+      }
+
+      for (final entry in logFiles.sublist(maxRemaining)) {
+        try {
+          await entry.file.delete();
+        } catch (ex) {
+          _log(
+            LogLevel.warning,
+            'Failed to delete old log file: ${entry.file.path}.',
+            tag: 'LoggingService',
+            error: ex,
+          );
+        }
+      }
+    } catch (ex) {
+      _log(
+        LogLevel.warning,
+        'Failed to cleanup old log files.',
+        tag: 'LoggingService',
+        error: ex,
+      );
     }
   }
 

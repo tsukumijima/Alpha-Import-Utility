@@ -21,6 +21,7 @@ const int _metadataSaveMaxRetries = 3;
 const Duration _metadataSaveRetryDelay = Duration(milliseconds: 200);
 const Duration _metadataLockWaitTimeout = Duration(seconds: 8);
 const Duration _metadataLockPollInterval = Duration(milliseconds: 200);
+const Duration _metadataStaleLockThreshold = Duration(seconds: 60);
 
 /// メタデータ管理サービス
 ///
@@ -106,7 +107,7 @@ class MetadataManager {
       _metadata = ImportMetadata.fromJson(json);
       _lastLoadedModified = stat.modified;
       _recordBySourcePath = {
-        for (final record in _metadata!.files) record.sourcePath: record,
+        for (final record in _metadata!.files) _normalizeSourcePathForLookup(record.sourcePath): record,
       };
 
       _log.info(
@@ -176,7 +177,7 @@ class MetadataManager {
         _metadata = metadata;
         _lastLoadedModified = (await file.stat()).modified;
         _recordBySourcePath = {
-          for (final record in metadata.files) record.sourcePath: record,
+          for (final record in metadata.files) _normalizeSourcePathForLookup(record.sourcePath): record,
         };
 
         _log.info(
@@ -221,6 +222,10 @@ class MetadataManager {
     final stopwatch = Stopwatch()..start();
 
     while (await lockFile.exists()) {
+      final wasStaleRemoved = await _cleanupStaleLockFileIfNeeded(lockFile);
+      if (wasStaleRemoved) {
+        break;
+      }
       if (stopwatch.elapsed >= _metadataLockWaitTimeout) {
         _log.error(
           'Lock wait timeout exceeded (${_metadataLockWaitTimeout.inSeconds}s).',
@@ -264,7 +269,12 @@ class MetadataManager {
     try {
       await _replaceMetadataFile(tempFile, file);
       return;
-    } catch (_) {
+    } catch (ex) {
+      _log.warning(
+        'Failed to restore metadata from temp file, cleaning up.',
+        tag: 'MetadataManager',
+        error: ex,
+      );
       // 復旧失敗時はクリーンアップに進む
     }
 
@@ -277,7 +287,12 @@ class MetadataManager {
     if (await tempFile.exists()) {
       try {
         await tempFile.delete();
-      } catch (_) {
+      } catch (ex) {
+        _log.warning(
+          'Failed to delete metadata temp file, leaving it for next recovery.',
+          tag: 'MetadataManager',
+          error: ex,
+        );
         // 削除できない場合は次回の復旧処理に任せる
       }
     }
@@ -365,6 +380,38 @@ class MetadataManager {
     return '${time.year}${pad(time.month)}${pad(time.day)}_${pad(time.hour)}${pad(time.minute)}${pad(time.second)}';
   }
 
+  /// ソースパスを比較用に正規化する
+  ///
+  /// Windows のバックスラッシュを POSIX 形式に統一し、小文字化する。
+  String _normalizeSourcePathForLookup(String sourcePath) {
+    return sourcePath.replaceAll('\\', '/').toLowerCase();
+  }
+
+  /// 古いロックファイルを検出して削除する
+  ///
+  /// 一定時間以上経過したロックは stale とみなし削除する。
+  Future<bool> _cleanupStaleLockFileIfNeeded(File lockFile) async {
+    try {
+      final stat = await lockFile.stat();
+      final age = DateTime.now().difference(stat.modified);
+      if (age >= _metadataStaleLockThreshold) {
+        _log.warning(
+          'Stale lock file detected (${age.inSeconds}s), removing: $metadataLockFilePath.',
+          tag: 'MetadataManager',
+        );
+        await lockFile.delete();
+        return true;
+      }
+    } catch (ex) {
+      _log.warning(
+        'Failed to inspect metadata lock file, keeping it.',
+        tag: 'MetadataManager',
+        error: ex,
+      );
+    }
+    return false;
+  }
+
   /// ロックファイルを削除する
   Future<void> _cleanupLockFile() async {
     final lockFile = File(metadataLockFilePath);
@@ -410,7 +457,8 @@ class MetadataManager {
   /// 取り込み済みかどうかの判定に使用する。
   Future<ImportedFileRecord?> findRecord(String sourcePath) async {
     await load();
-    return _recordBySourcePath[sourcePath];
+    final normalizedSourcePath = _normalizeSourcePathForLookup(sourcePath);
+    return _recordBySourcePath[normalizedSourcePath];
   }
 
   /// 指定したソースパスが取り込み済みかどうかを確認
