@@ -1,0 +1,120 @@
+# Flutter Desktop (Windows / macOS) のビルドとリリースを行うワークフロー
+# - master push 時: ビルドのみ（CI）
+# - tag push 時: ビルド + GitHub Release 作成
+
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows (x64)
+          - os: windows-latest
+            platform: windows
+            artifact-name: alpha-import-utility-windows
+            build-output: build/windows/x64/runner/Release
+          # macOS (Apple Silicon)
+          - os: macos-latest
+            platform: macos
+            artifact-name: alpha-import-utility-macos
+            build-output: build/macos/Build/Products/Release
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Flutter のセットアップ
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # macOS: CocoaPods のインストール
+      - name: Install CocoaPods
+        if: matrix.platform == 'macos'
+        run: |
+          gem install cocoapods
+
+      # 依存関係のインストール
+      - name: Install dependencies
+        run: flutter pub get
+
+      # コード生成 (.g.dart ファイル)
+      - name: Run build_runner
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      # Windows ビルド
+      - name: Build for Windows
+        if: matrix.platform == 'windows'
+        run: flutter build windows --release
+
+      # macOS ビルド
+      - name: Build for macOS
+        if: matrix.platform == 'macos'
+        run: flutter build macos --release
+
+      # Windows: Release フォルダを zip 圧縮（flutter run 用の ASCII 名コピーを除外）
+      - name: Archive Windows build
+        if: matrix.platform == 'windows'
+        run: |
+          Remove-Item -Path "${{ matrix.build-output }}/alpha_import_utility.exe" -ErrorAction SilentlyContinue
+          Compress-Archive -Path "${{ matrix.build-output }}/*" -DestinationPath "${{ matrix.artifact-name }}.zip"
+        shell: pwsh
+
+      # macOS: .app を zip 圧縮
+      - name: Archive macOS build
+        if: matrix.platform == 'macos'
+        run: |
+          cd "${{ matrix.build-output }}"
+          zip -r "${{ github.workspace }}/${{ matrix.artifact-name }}.zip" "α Import Utility.app"
+
+      # ビルド成果物をアップロード（CI 確認用）
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-name }}.zip
+          retention-days: 7
+
+  # タグ push 時のみリリースを作成
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 全プラットフォームのビルド成果物をダウンロード
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # ダウンロードした成果物の確認
+      - name: List artifacts
+        run: |
+          find artifacts -type f -name "*.zip"
+
+      # GitHub Release を作成
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "artifacts/**/*.zip"
+          generateReleaseNotes: true
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
