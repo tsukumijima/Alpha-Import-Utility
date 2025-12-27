@@ -104,16 +104,20 @@ jobs:
         with:
           path: artifacts
 
-      # ダウンロードした成果物の確認
-      - name: List artifacts
+      # リリース用にファイル名を変更（α Import Utility v1.0.0-windows.zip 形式）
+      - name: Rename artifacts for release
         run: |
-          find artifacts -type f -name "*.zip"
+          VERSION="${{ github.ref_name }}"
+          mkdir -p release
+          mv "artifacts/alpha-import-utility-windows/alpha-import-utility-windows.zip" "release/α Import Utility ${VERSION}-windows.zip"
+          mv "artifacts/alpha-import-utility-macos/alpha-import-utility-macos.zip" "release/α Import Utility ${VERSION}-macos.zip"
+          ls -la release/
 
       # GitHub Release を作成
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "artifacts/**/*.zip"
+          artifacts: "release/*.zip"
           generateReleaseNotes: true
           draft: false
           prerelease: false
