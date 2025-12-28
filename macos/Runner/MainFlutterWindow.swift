@@ -14,6 +14,12 @@ class MainFlutterWindow: NSWindow {
     super.awakeFromNib()
   }
 
+  /// 起動時の一瞬表示を抑止し、Dart 側の show まで非表示に保つ
+  override func order(_ place: NSWindow.OrderingMode, relativeTo otherWin: Int) {
+    super.order(place, relativeTo: otherWin)
+    hiddenWindowAtLaunch()
+  }
+
   /// ファイル日時操作の MethodChannel を初期化する
   private func setupFileTimeChannel(_ controller: FlutterViewController) {
     let channel = FlutterMethodChannel(
