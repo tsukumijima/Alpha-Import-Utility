@@ -6,3 +6,4 @@ library;
 export 'exif_utils.dart';
 export 'file_utils.dart';
 export 'hash_utils.dart';
+export 'version_utils.dart';

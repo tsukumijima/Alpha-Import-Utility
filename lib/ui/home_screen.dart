@@ -11,6 +11,8 @@ import '../models/settings.dart';
 import '../services/device_detector.dart';
 import '../services/settings_service.dart';
 import '../services/logging_service.dart';
+import '../services/update_check_service.dart';
+import 'widgets/update_banner.dart';
 import 'theme.dart';
 import 'widgets/device_card.dart';
 import 'import_dialog.dart';
@@ -40,6 +42,12 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 現在の設定
   ImportSettings? _settings;
 
+  /// アップデートチェック結果
+  UpdateCheckResult? _updateCheckResult;
+
+  /// アップデートバナーを表示するかどうか
+  bool _isShowUpdateBanner = true;
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +64,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _initialize() async {
     // 設定を読み込み
     _settings = await SettingsService.instance.loadImportSettings();
+
+    // アップデートチェック（バックグラウンドで実行、UI をブロックしない）
+    _checkForUpdates();
 
     // デバイス検出を開始
     _deviceDetector.onDevicesChanged = (devices) {
@@ -74,6 +85,16 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _devices = devices;
         _isScanning = false;
+      });
+    }
+  }
+
+  /// アップデートをチェック
+  Future<void> _checkForUpdates() async {
+    final result = await UpdateCheckService.instance.checkForUpdates();
+    if (mounted && result.isUpdateAvailable) {
+      setState(() {
+        _updateCheckResult = result;
       });
     }
   }
@@ -200,6 +221,20 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               // ヘッダー
               _buildHeader(context),
+
+              // アップデートバナー（新しいバージョンがある場合のみ表示）
+              if (_updateCheckResult?.isUpdateAvailable == true &&
+                  _updateCheckResult?.latestRelease != null &&
+                  _isShowUpdateBanner)
+                UpdateBanner(
+                  release: _updateCheckResult!.latestRelease!,
+                  currentVersion: _updateCheckResult!.currentVersion,
+                  onDismiss: () {
+                    setState(() {
+                      _isShowUpdateBanner = false;
+                    });
+                  },
+                ),
 
               // コンテンツ
               Expanded(
