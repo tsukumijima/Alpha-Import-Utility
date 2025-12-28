@@ -285,7 +285,7 @@ class WindowSettings {
 
   WindowSettings({
     this.width = 650,
-    this.height = 700,
+    this.height = 680,
     this.positionX,
     this.positionY,
     this.isMaximized = false,

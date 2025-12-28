@@ -44,7 +44,7 @@ void main() async {
   // ウィンドウオプションの設定
   final windowOptions = WindowOptions(
     size: Size(windowSettings.width, windowSettings.height),
-    minimumSize: const Size(650, 700),
+    minimumSize: const Size(650, 680),
     center: hasSavedPosition == false,
     title: 'α Import Utility',
     backgroundColor: Colors.transparent,

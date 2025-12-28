@@ -249,19 +249,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// ヘッダーを構築
   Widget _buildHeader(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Row(
         children: [
-          // アプリタイトル
-          Text(
-            'α Import Utility',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.primary,
-            ),
+          // アプリロゴ
+          Image.asset(
+            'assets/images/logo.png',
+            height: 34,
+            filterQuality: FilterQuality.high,
           ),
           const Spacer(),
 
@@ -349,7 +345,7 @@ class _HomeScreenState extends State<HomeScreen> {
             title: 'SD カードから取り込み',
             description: 'SD カードリーダーを使用して、SD カードから写真・動画を取り込みます。',
             devices: _sdCardDevices,
-            emptyMessage: 'SD カードが検出されていません',
+            emptyMessage: 'SD カードが挿入されていません',
             emptyHint: 'SD カードをカードリーダーに挿入してください',
           ),
 
@@ -357,8 +353,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // フォルダから取り込みセクション
           _buildFolderSection(context),
-
-          const SizedBox(height: 24),
         ],
       ),
     );
@@ -503,7 +497,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'フォルダを選択...',
+                          'フォルダを選択 ...',
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: Colors.white70,
                             fontWeight: FontWeight.w600,
@@ -511,7 +505,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Sony α SD カード構造のフォルダを選択してください',
+                          'Sony α カメラの SD カードのバックアップフォルダを選択してください',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: Colors.white38,
                           ),
