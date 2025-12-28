@@ -4,6 +4,7 @@
 /// アプリ起動時に一度だけチェックを行い、結果をキャッシュする。
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -65,8 +66,8 @@ class UpdateCheckService {
   /// キャッシュされたチェック結果
   UpdateCheckResult? _cachedResult;
 
-  /// チェック中かどうか
-  bool _isChecking = false;
+  /// チェック中の場合の Completer（待機用）
+  Completer<UpdateCheckResult>? _checkCompleter;
 
   /// ロガー
   final _log = LoggingService.instance;
@@ -96,101 +97,21 @@ class UpdateCheckService {
       return _cachedResult!;
     }
 
-    // チェック中の場合は完了を待機（多重実行防止）
-    if (_isChecking) {
+    // チェック中の場合は Completer の完了を待機（多重実行防止）
+    if (_checkCompleter != null) {
       _log.debug('Update check already in progress, waiting.', tag: 'UpdateCheck');
-      // 簡易的なポーリングで待機
-      while (_isChecking) {
-        await Future.delayed(const Duration(milliseconds: 100));
-      }
-      return _cachedResult!;
+      return _checkCompleter!.future;
     }
 
-    _isChecking = true;
+    // 新しいチェックを開始
+    _checkCompleter = Completer<UpdateCheckResult>();
     _log.info('Checking for updates.', tag: 'UpdateCheck');
 
     try {
-      // 現在のバージョンを取得
-      final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.version;
-      _log.debug('Current version: $currentVersion.', tag: 'UpdateCheck');
-
-      // GitHub API にリクエスト
-      final response = await http
-          .get(
-            Uri.parse(_apiEndpoint),
-            headers: {
-              'Accept': 'application/vnd.github+json',
-              'X-GitHub-Api-Version': '2022-11-28',
-            },
-          )
-          .timeout(Duration(seconds: _timeoutSeconds));
-
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final release = GitHubRelease.fromJson(json);
-
-        _log.debug('Latest release: ${release.tagName}.', tag: 'UpdateCheck');
-
-        // プレリリースとドラフトはスキップ
-        if (release.isPrerelease || release.isDraft) {
-          _log.info(
-            'Latest release is prerelease or draft, skipping.',
-            tag: 'UpdateCheck',
-          );
-          _cachedResult = UpdateCheckResult(
-            isUpdateAvailable: false,
-            currentVersion: currentVersion,
-            latestVersion: release.version,
-            latestRelease: release,
-          );
-          return _cachedResult!;
-        }
-
-        // バージョン比較
-        final isUpdateAvailable = isNewerVersionAvailable(
-          currentVersion,
-          release.version,
-        );
-
-        if (isUpdateAvailable) {
-          _log.info(
-            'New version available: ${release.version} (current: $currentVersion).',
-            tag: 'UpdateCheck',
-          );
-        } else {
-          _log.info('No update available.', tag: 'UpdateCheck');
-        }
-
-        _cachedResult = UpdateCheckResult(
-          isUpdateAvailable: isUpdateAvailable,
-          currentVersion: currentVersion,
-          latestVersion: release.version,
-          latestRelease: release,
-        );
-        return _cachedResult!;
-      } else if (response.statusCode == 404) {
-        // リリースが存在しない場合
-        _log.warning('No releases found on GitHub.', tag: 'UpdateCheck');
-        _cachedResult = UpdateCheckResult(
-          isUpdateAvailable: false,
-          currentVersion: currentVersion,
-          errorMessage: 'リリースが見つかりませんでした。',
-        );
-        return _cachedResult!;
-      } else {
-        // その他の API エラー
-        _log.warning(
-          'GitHub API returned status ${response.statusCode}.',
-          tag: 'UpdateCheck',
-        );
-        _cachedResult = UpdateCheckResult(
-          isUpdateAvailable: false,
-          currentVersion: currentVersion,
-          errorMessage: 'GitHub API エラー (${response.statusCode})',
-        );
-        return _cachedResult!;
-      }
+      final result = await _performUpdateCheck();
+      _cachedResult = result;
+      _checkCompleter!.complete(result);
+      return result;
     } catch (ex, stackTrace) {
       // ネットワークエラーなど
       _log.warning(
@@ -209,14 +130,97 @@ class UpdateCheckService {
         // 無視
       }
 
-      _cachedResult = UpdateCheckResult(
+      final errorResult = UpdateCheckResult(
         isUpdateAvailable: false,
         currentVersion: currentVersion,
         errorMessage: 'アップデートの確認に失敗しました。',
       );
-      return _cachedResult!;
+      _cachedResult = errorResult;
+      _checkCompleter!.complete(errorResult);
+      return errorResult;
     } finally {
-      _isChecking = false;
+      _checkCompleter = null;
+    }
+  }
+
+  /// 実際のアップデートチェック処理を行う
+  Future<UpdateCheckResult> _performUpdateCheck() async {
+    // 現在のバージョンを取得
+    final packageInfo = await PackageInfo.fromPlatform();
+    final currentVersion = packageInfo.version;
+    _log.debug('Current version: $currentVersion.', tag: 'UpdateCheck');
+
+    // GitHub API にリクエスト
+    final response = await http
+        .get(
+          Uri.parse(_apiEndpoint),
+          headers: {
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+        )
+        .timeout(Duration(seconds: _timeoutSeconds));
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final release = GitHubRelease.fromJson(json);
+
+      _log.debug('Latest release: ${release.tagName}.', tag: 'UpdateCheck');
+
+      // プレリリースとドラフトはスキップ
+      if (release.isPrerelease || release.isDraft) {
+        _log.info(
+          'Latest release is prerelease or draft, skipping.',
+          tag: 'UpdateCheck',
+        );
+        return UpdateCheckResult(
+          isUpdateAvailable: false,
+          currentVersion: currentVersion,
+          latestVersion: release.version,
+          latestRelease: release,
+        );
+      }
+
+      // バージョン比較
+      final isUpdateAvailable = isNewerVersionAvailable(
+        currentVersion,
+        release.version,
+      );
+
+      if (isUpdateAvailable) {
+        _log.info(
+          'New version available: ${release.version} (current: $currentVersion).',
+          tag: 'UpdateCheck',
+        );
+      } else {
+        _log.info('No update available.', tag: 'UpdateCheck');
+      }
+
+      return UpdateCheckResult(
+        isUpdateAvailable: isUpdateAvailable,
+        currentVersion: currentVersion,
+        latestVersion: release.version,
+        latestRelease: release,
+      );
+    } else if (response.statusCode == 404) {
+      // リリースが存在しない場合
+      _log.warning('No releases found on GitHub.', tag: 'UpdateCheck');
+      return UpdateCheckResult(
+        isUpdateAvailable: false,
+        currentVersion: currentVersion,
+        errorMessage: 'リリースが見つかりませんでした。',
+      );
+    } else {
+      // その他の API エラー
+      _log.warning(
+        'GitHub API returned status ${response.statusCode}.',
+        tag: 'UpdateCheck',
+      );
+      return UpdateCheckResult(
+        isUpdateAvailable: false,
+        currentVersion: currentVersion,
+        errorMessage: 'GitHub API エラー (${response.statusCode})',
+      );
     }
   }
 

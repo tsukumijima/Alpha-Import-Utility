@@ -25,9 +25,9 @@ class UpdateBanner extends StatelessWidget {
   final VoidCallback onDismiss;
 
   /// ロガー
-  final _log = LoggingService.instance;
+  LoggingService get _log => LoggingService.instance;
 
-  UpdateBanner({
+  const UpdateBanner({
     super.key,
     required this.release,
     required this.currentVersion,
