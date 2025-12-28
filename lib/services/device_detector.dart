@@ -11,8 +11,8 @@ import 'package:disks_desktop/disks_desktop.dart';
 import 'package:path/path.dart' as p;
 
 import 'file_time_service.dart';
-import 'sony_filesystem.dart';
 import 'logging_service.dart';
+import 'sony_filesystem.dart';
 
 /// 検出されたデバイスの情報
 class DetectedDevice {
@@ -172,6 +172,11 @@ class DeviceDetector {
     RegExp(r'^Macintosh HD', caseSensitive: false),
   ];
 
+  /// PMHOME の最大想定サイズ（バイト）
+  ///
+  /// Sony カメラの PMHOME はおおむね 64MB 程度のため、安全側で 128MB を上限とする。
+  static const int _pmhomeMaxBytes = 128 * 1024 * 1024;
+
   /// ポーリングタイマー
   Timer? _pollingTimer;
 
@@ -263,7 +268,11 @@ class DeviceDetector {
       }
 
       // PMHOME ボリュームはスキップ（ライセンス情報のみ）
-      final isPmhomeVolume = volumeName.toUpperCase() == 'PMHOME' || p.basename(mountPoint).toUpperCase() == 'PMHOME';
+      final isPmhomeVolume = await _isPMHOMEVolume(
+        disk,
+        mountPoint,
+        volumeName,
+      );
       if (isPmhomeVolume) {
         _log.debug('Skipping PMHOME volume (license info only).', tag: 'DeviceDetector');
         continue;
@@ -352,6 +361,62 @@ class DeviceDetector {
     }
 
     return false;
+  }
+
+  /// PMHOME ボリュームかどうかを判定
+  ///
+  /// ラベルが取得できない環境向けに、容量とルート直下の構造から判定する。
+  Future<bool> _isPMHOMEVolume(
+    Disk disk,
+    String mountPoint,
+    String volumeName,
+  ) async {
+    final normalizedVolumeName = volumeName.trim();
+    if (normalizedVolumeName.isNotEmpty && normalizedVolumeName.toUpperCase() == 'PMHOME') {
+      return true;
+    }
+
+    final normalizedMountName = p.basename(p.normalize(mountPoint)).trim();
+    if (normalizedMountName.isNotEmpty && normalizedMountName.toUpperCase() == 'PMHOME') {
+      return true;
+    }
+
+    final totalSize = disk.size;
+    if (totalSize != null && totalSize > _pmhomeMaxBytes) {
+      return false;
+    }
+
+    final rootDir = Directory(mountPoint);
+    if (!await rootDir.exists()) {
+      return false;
+    }
+
+    final rootEntries = await rootDir.list(followLinks: false).toList();
+    if (rootEntries.isEmpty) {
+      return false;
+    }
+
+    final rootEntryNames = rootEntries.map((entry) => p.basename(entry.path)).toList();
+    final hasLicenseFolder = rootEntryNames.any(
+      (entryName) => entryName.toUpperCase() == 'LICENSE',
+    );
+    if (!hasLicenseFolder) {
+      return false;
+    }
+
+    // ルート直下に LICENSE 以外のフォルダやファイルがある場合は PMHOME とみなさない
+    const allowedSystemEntries = [
+      'LICENSE',
+      'SYSTEM VOLUME INFORMATION',
+      '\$RECYCLE.BIN',
+    ];
+    for (final entryName in rootEntryNames) {
+      if (!allowedSystemEntries.contains(entryName.toUpperCase())) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /// ディスク情報からデバイスタイプを判定
