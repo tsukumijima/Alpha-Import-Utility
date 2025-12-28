@@ -236,6 +236,11 @@ class _ImportDialogState extends State<ImportDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // ダイアログコンテンツの最大高さをウィンドウ高さの 60% に制限
+    // ref: https://www.codestudy.net/blog/how-to-constrain-height-of-alertdialog/
+    final screenHeight = MediaQuery.of(context).size.height;
+    final maxContentHeight = screenHeight * 0.6;
+
     return PopScope(
       canPop: _phase == _ImportDialogPhase.completed,
       onPopInvokedWithResult: (didPop, result) {
@@ -244,11 +249,16 @@ class _ImportDialogState extends State<ImportDialog> {
         }
       },
       child: AlertDialog(
-        scrollable: true,
         title: Text(_getDialogTitle()),
-        content: SizedBox(
-          width: 500,
-          child: _buildContentByPhase(),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 500,
+            maxHeight: maxContentHeight,
+          ),
+          child: SizedBox(
+            width: 500,
+            child: _buildContentByPhase(),
+          ),
         ),
         actions: _buildActionsByPhase(),
       ),
@@ -307,37 +317,40 @@ class _ImportDialogState extends State<ImportDialog> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 結果サマリー
-        ImportResultSummary(result: _result!),
+    // SingleChildScrollView でラップして、警告リスト展開時のオーバーフローを防ぐ
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 結果サマリー
+          ImportResultSummary(result: _result!),
 
-        // エラー理由（あれば）
-        if (_result!.errorMessage != null) ...[
-          const SizedBox(height: 16),
-          Text(
-            '中断理由',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.error,
+          // エラー理由（あれば）
+          if (_result!.errorMessage != null) ...[
+            const SizedBox(height: 16),
+            Text(
+              '中断理由',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _result!.errorMessage!,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.error,
+            const SizedBox(height: 8),
+            Text(
+              _result!.errorMessage!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
             ),
-          ),
-        ],
+          ],
 
-        // 警告一覧（あれば）
-        if (_result!.warnings.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          _buildWarningsList(),
+          // 警告一覧（あれば）
+          if (_result!.warnings.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            _buildWarningsList(),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -391,10 +404,11 @@ class _ImportDialogState extends State<ImportDialog> {
           ),
         ),
         const SizedBox(height: 16),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 300),
+        // Flexible を使って親の ConstrainedBox の制約内で残りのスペースを使う
+        // shrinkWrap: true は IntrinsicWidth/Height との組み合わせで
+        // intrinsic dimensions エラーを起こすため使用しない
+        Flexible(
           child: ListView.separated(
-            shrinkWrap: true,
             itemCount: _plan!.items.length,
             separatorBuilder: (context, index) => const Divider(height: 16),
             itemBuilder: (context, index) => _buildPreviewItem(theme, _plan!.items[index]),
@@ -425,6 +439,7 @@ class _ImportDialogState extends State<ImportDialog> {
   /// 警告一覧を構築
   Widget _buildWarningsList() {
     final theme = Theme.of(context);
+
     return ExpansionTile(
       title: Text(
         '警告 (${_result!.warnings.length}件)',
@@ -433,31 +448,31 @@ class _ImportDialogState extends State<ImportDialog> {
         ),
       ),
       initiallyExpanded: false,
+      // 外側の SingleChildScrollView がスクロールを担当するため、
+      // ListView は shrinkWrap + NeverScrollableScrollPhysics で固定サイズ化する
       children: [
-        SizedBox(
-          height: 240,
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: _result!.warnings.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final warning = _result!.warnings[index];
-              return ListTile(
-                dense: true,
-                leading: const Icon(Icons.warning_outlined, color: Colors.orange, size: 20),
-                title: Text(
-                  warning.file.fileName,
-                  style: theme.textTheme.bodySmall,
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _result!.warnings.length,
+          separatorBuilder: (context, index) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            final warning = _result!.warnings[index];
+            return ListTile(
+              dense: true,
+              leading: const Icon(Icons.warning_outlined, color: Colors.orange, size: 20),
+              title: Text(
+                warning.file.fileName,
+                style: theme.textTheme.bodySmall,
+              ),
+              subtitle: Text(
+                warning.message,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white54,
                 ),
-                subtitle: Text(
-                  warning.message,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.white54,
-                  ),
-                ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         ),
       ],
     );
