@@ -4,19 +4,19 @@
 /// 3つのセクション（カメラ、SD カード、フォルダ）に分かれている。
 library;
 
-import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 
 import '../models/settings.dart';
 import '../services/device_detector.dart';
-import '../services/settings_service.dart';
 import '../services/logging_service.dart';
+import '../services/settings_service.dart';
 import '../services/update_check_service.dart';
-import 'widgets/update_banner.dart';
-import 'theme.dart';
-import 'widgets/device_card.dart';
 import 'import_dialog.dart';
 import 'settings_dialog.dart';
+import 'theme.dart';
+import 'widgets/device_card.dart';
+import 'widgets/update_banner.dart';
 
 /// メイン画面ウィジェット
 class HomeScreen extends StatefulWidget {

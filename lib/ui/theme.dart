@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 /// アプリケーションのダークテーマを取得
 ThemeData getAppTheme() {
   // Sony α のイメージカラー（オレンジ）をアクセントカラーとして使用
-  const sonyOrange = Color(0xFFFF6D00);
+  const sonyOrange = Color(0xfff26c2b);
 
   // Flutter は明示的に日本語フォントを指定しないと fontWeight の指定が効かないらしい
   // ref: https://github.com/flutter/flutter/issues/179104#issuecomment-3580632879
