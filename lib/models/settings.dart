@@ -3,9 +3,21 @@
 /// 取り込み設定やアプリケーション設定を保持する。
 library;
 
+import 'dart:io' show Platform;
+
 import 'package:json_annotation/json_annotation.dart';
 
 part 'settings.g.dart';
+
+/// ウィンドウの最小幅（全プラットフォーム共通）
+const double windowMinWidth = 650;
+
+/// ウィンドウの最小高さ（プラットフォーム別）
+///
+/// macOS: 680px、Windows: 700px
+/// macOS と Windows でシステム UI（タイトルバー等）の高さが異なるため、
+/// 同じ内容を表示するために必要な高さが異なる。
+double get windowMinHeight => Platform.isWindows ? 700 : 680;
 
 /// サブフォルダのパターン
 ///
@@ -292,8 +304,13 @@ class WindowSettings {
   });
 
   /// デフォルト設定を取得
+  ///
+  /// プラットフォームに応じた適切なデフォルト高さを使用する。
   factory WindowSettings.defaults() {
-    return WindowSettings();
+    return WindowSettings(
+      width: windowMinWidth,
+      height: windowMinHeight,
+    );
   }
 
   /// JSON からデシリアライズ

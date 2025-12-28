@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'models/settings.dart';
 import 'services/logging_service.dart';
 import 'services/settings_service.dart';
 
@@ -44,7 +45,7 @@ void main() async {
   // ウィンドウオプションの設定
   final windowOptions = WindowOptions(
     size: Size(windowSettings.width, windowSettings.height),
-    minimumSize: const Size(650, 680),
+    minimumSize: Size(windowMinWidth, windowMinHeight),
     center: hasSavedPosition == false,
     title: 'α Import Utility',
     backgroundColor: Colors.transparent,
