@@ -1,6 +1,6 @@
 # α Import Utility
 
-<img src="docs/images/hero.png" alt="α Import Utility のメイン画面。Sony α のイメージカラーであるオレンジをアクセントにした黒基調の UI で、3つのインポートモードを表示している。" width="600">
+<img src="docs/images/hero.png" alt="α Import Utility のメイン画面。Sony α のイメージカラーであるオレンジをアクセントにした黒基調の UI で、3つのインポートモードを表示している。" width="600"><br>
 
 **Sony α カメラやその SD カードから、未取り込みの写真・動画を PC に安全に取り込むデスクトップアプリです。α6700 にて検証しています。**
 
@@ -165,17 +165,29 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 
 ### Windows での起動
 
+<img src="docs/images/windows-folder.png" alt="Windows でのフォルダ構成。α Import Utility.exe が表示されている。" width="500"><br>
+
 1. 展開したフォルダを任意のフォルダに移動します。`C:\Applications\α Import Utility` など、Program Files 以外のフォルダへの展開を推奨します。
 2. `α Import Utility.exe` をダブルクリックして起動します。
 
-<img src="docs/images/windows-folder.png" alt="Windows でのフォルダ構成。α Import Utility.exe が表示されている。" width="500">
-
 ### macOS での起動
 
-1. 展開した `α Import Utility.app` を `Applications` フォルダにドラッグ＆ドロップします。
-2. 初回起動時は右クリック →「開く」を選択して、Gatekeeper の警告を回避します。
+<img src="docs/images/macos-folder.png" alt="macOS でのフォルダ構成。" width="500"><br>
 
-<img src="docs/images/macos-gatekeeper.png" alt="macOS での初回起動時、右クリックメニューから「開く」を選択している様子。" width="400">
+1. 展開して表示された `α Import Utility.app` を `Applications` フォルダにドラッグ＆ドロップします。
+2. 初回起動時は以下の手順で、Gatekeeper のセキュリティ警告を回避する必要があります。
+
+> [!WARNING]
+> **macOS 14 Sequoia 以降では、未署名アプリに対するセキュリティが強化されています。**  
+> 初回起動時に「開発元が検証できないため開けません」「悪質なソフトウェアであるかどうかを Apple では確認できないため、このソフトウェアは開けません」と表示される場合があります。
+> 
+> α Import Utility は安全なソフトウェアですので、信頼していただけるようでしたら、以下の手順で起動を進めてください。
+> 
+> 1. 一度「キャンセル」or「OK」or「完了」をクリックしてポップアップを閉じます。
+> 2. 「システム環境設定」→「セキュリティとプライバシー」→「このまま開く」をクリックします。
+>    - 「ダウンロードしたアプリケーションの実行許可」は「AppStoreと確認済みの開発元からのアプリケーションを許可」または「すべてのアプリを許可」に設定されている必要があります。
+> 
+> **macOS 15 Sequoia での詳しい手順は [こちら (外部リンク)](https://softantenna.com/blog/how-to-bypass-gatekeeper-on-macos-sequoia/) の記事をご覧ください。**
 
 ## Usage
 
@@ -184,9 +196,9 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 初回起動時は保存先フォルダを設定する必要があります。  
 右上の歯車アイコンをクリックして設定画面を開きます。
 
-<img src="docs/images/settings-basic.png" alt="設定画面の基本設定タブ。保存先フォルダ、サブフォルダ設定、日付フォーマットが表示されている。" width="500">
-
 #### 基本設定
+
+<img src="docs/images/settings-basic.png" alt="設定画面の基本設定タブ。保存先フォルダ、サブフォルダ設定、日付フォーマットが表示されている。" width="500"><br>
 
 | 設定項目 | 説明 |
 |----------|------|
@@ -197,7 +209,7 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 
 #### 取り込みオプション
 
-<img src="docs/images/settings-options.png" alt="設定画面の取り込みオプションタブ。EXIF 日時復元、カメラタイムゾーン、動画メタデータ設定が表示されている。" width="500">
+<img src="docs/images/settings-options.png" alt="設定画面の取り込みオプションタブ。EXIF 日時復元、カメラタイムゾーン、動画メタデータ設定が表示されている。" width="500"><br>
 
 | 設定項目 | 説明 | デフォルト |
 |----------|------|-----------|
@@ -208,30 +220,31 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 
 ### 2. デバイスの接続
 
-カメラを USB ケーブルで接続するか、SD カードをカードリーダーに挿入すると、自動的に検出されてメイン画面に表示されます。
+<img src="docs/images/device-detected.png" alt="SD カードが検出され、メイン画面にデバイスカードとして表示されている様子。デバイス名、容量情報が表示されている。" width="600"><br>
 
-<img src="docs/images/device-detected.png" alt="SD カードが検出され、メイン画面にデバイスカードとして表示されている様子。デバイス名、容量情報が表示されている。" width="600">
+カメラを USB ケーブルで接続するか、SD カードをカードリーダーに挿入すると、自動的に検出されてメイン画面に表示されます。
 
 ### 3. 取り込みの開始
 
 検出されたデバイスのカードをクリックすると、取り込みが開始されます。
 
-<img src="docs/images/import-progress.png" alt="取り込み中のダイアログ。現在処理中のファイル名、全体の進捗バー、処理件数が表示されている。" width="450">
+<img src="docs/images/import-progress.png" alt="取り込み中のダイアログ。現在処理中のファイル名、全体の進捗バー、処理件数が表示されている。" width="450"><br>
 
 取り込み中はいつでも「キャンセル」ボタンで中断できます。  
 中断時は現在コピー中のファイルが完了してから停止するため、不完全なファイルが残ることはありません。
 
 ### 4. 取り込み完了
 
-取り込みが完了すると、結果のサマリーが表示されます。
+<img src="docs/images/import-complete.png" alt="取り込み完了ダイアログ。成功件数、スキップ件数、警告件数、処理時間が表示されている。" width="450"><br>
 
-<img src="docs/images/import-complete.png" alt="取り込み完了ダイアログ。成功件数、スキップ件数、警告件数、処理時間が表示されている。" width="450">
-
+取り込みが完了すると、結果のサマリーが表示されます。  
 「保存先を開く」ボタンで保存先フォルダを直接開くことができます。
 
 ## Import Methods
 
 ### カメラから取り込み
+
+<img src="docs/images/import-camera.png" alt="カメラから取り込みセクション。USB 接続されたカメラが検出されている様子。" width="600"><br>
 
 USB ケーブルでカメラを PC に接続し、USB マスストレージ (MSC) モードで認識させます。  
 カメラが検出されると「カメラから取り込み」セクションに表示されます。
@@ -240,16 +253,16 @@ USB ケーブルでカメラを PC に接続し、USB マスストレージ (MSC
 > **MTP (Media Transfer Protocol) モードでの接続には対応していません。**  
 > **必ず USB マスストレージ (MSC) モードで接続してください。**
 
-<img src="docs/images/import-camera.png" alt="カメラから取り込みセクション。USB 接続されたカメラが検出されている様子。" width="600">
-
 ### SD カードから取り込み
+
+<img src="docs/images/import-sdcard.png" alt="SD カードから取り込みセクション。SD カードが検出されている様子。" width="600"><br>
 
 SD カードをカードリーダー経由で PC に接続します。  
 SD カードが検出されると「SD カードから取り込み」セクションに表示されます。
 
-<img src="docs/images/import-sdcard.png" alt="SD カードから取り込みセクション。SD カードが検出されている様子。" width="600">
-
 ### フォルダから取り込み
+
+<img src="docs/images/import-folder.png" alt="フォルダから取り込みセクション。フォルダ選択ボタンが表示されている様子。" width="600"><br>
 
 「フォルダを選択...」をクリックして、SD カードの構造を維持したままのバックアップフォルダを直接指定できます。  
 もちろん、内蔵ストレージだけでなく、USB SSD や USB メモリ上のフォルダにも対応しています。  
@@ -258,8 +271,6 @@ SD カードが検出されると「SD カードから取り込み」セクシ�
 > [!WARNING]
 > **Sony α の SD カード構造として認識できないフォルダは取り込みできません。**  
 > 必ず `DCIM/` と `PRIVATE/M4ROOT/CLIP/` が存在する SD カードのルートフォルダを指定してください。
-
-<img src="docs/images/import-folder.png" alt="フォルダから取り込みセクション。フォルダ選択ボタンが表示されている様子。" width="600">
 
 ## Technical Security
 
