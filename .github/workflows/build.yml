@@ -40,6 +40,10 @@ jobs:
         with:
           channel: stable
           cache: true
+          # Flutter 3.35 系に固定する
+          # Flutter 3.38 系は Windows において、マルチバイト文字の含まれるフォルダパスに
+          # インストールすると即座にクラッシュする致命的なバグがある
+          flutter-version: 3.35.7
 
       # macOS: CocoaPods のインストール
       - name: Install CocoaPods
