@@ -64,6 +64,17 @@ jobs:
         if: matrix.platform == 'windows'
         run: flutter build windows --release
 
+      # Windows: VC++ ランタイム DLL をコピー（ポータブル配布用）
+      # ビルドに使用した MSVC と同じバージョンの DLL を vswhere で取得
+      - name: Copy VC++ Runtime DLLs
+        if: matrix.platform == 'windows'
+        working-directory: ${{ matrix.build-output }}
+        run: |
+          Copy-Item (vswhere -latest -find 'VC\Redist\MSVC\*\x64\*\msvcp140.dll') .
+          Copy-Item (vswhere -latest -find 'VC\Redist\MSVC\*\x64\*\vcruntime140.dll') .
+          Copy-Item (vswhere -latest -find 'VC\Redist\MSVC\*\x64\*\vcruntime140_1.dll') .
+        shell: pwsh
+
       # macOS ビルド
       - name: Build for macOS
         if: matrix.platform == 'macos'
