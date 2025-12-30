@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../l10n/generated/app_localizations.dart';
 import '../models/import_result.dart';
 import '../models/settings.dart';
 import '../services/device_detector.dart';
@@ -71,9 +72,11 @@ class _ImportDialogState extends State<ImportDialog> {
 
   /// 取り込みフローを初期化
   Future<void> _initializeImportFlow() async {
+    final l10n = AppLocalizations.of(context);
     _engine = ImportEngine(
       sdCardRoot: widget.device.mountPoint,
       settings: widget.settings,
+      l10n: l10n,
     );
 
     _engine!.onProgress = (progress) {
@@ -132,8 +135,9 @@ class _ImportDialogState extends State<ImportDialog> {
     } catch (ex) {
       _prepareStopwatch.stop();
       _prepareDuration = _prepareStopwatch.elapsed;
-      final errorMessage = _engine?.resolveFatalErrorMessage(ex) ?? '取り込み中にエラーが発生したため中断しました。';
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
+        final errorMessage = _engine?.resolveFatalErrorMessage(ex, l10n) ?? l10n.error_genericImportFailed;
         setState(() {
           _result = ImportResult.error(
             errorMessage: errorMessage,
@@ -180,21 +184,22 @@ class _ImportDialogState extends State<ImportDialog> {
   /// キャンセルを要求
   Future<void> _requestCancel() async {
     setState(() => _isCancelConfirming = true);
+    final l10n = AppLocalizations.of(context);
 
     final shouldCancel = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('取り込みをキャンセルしますか？'),
-        content: Text(_getCancelMessage()),
+        title: Text(l10n.import_cancelConfirm_title),
+        content: Text(_getCancelMessage(l10n)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('続行'),
+            child: Text(l10n.button_continue),
           ),
           ElevatedButton.icon(
             onPressed: () => Navigator.pop(context, true),
             icon: const Icon(Icons.cancel),
-            label: const Text('キャンセル'),
+            label: Text(l10n.button_cancel),
           ),
         ],
       ),
@@ -289,8 +294,9 @@ class _ImportDialogState extends State<ImportDialog> {
 
   /// 進捗表示を構築
   Widget _buildProgress() {
+    final l10n = AppLocalizations.of(context);
     // ImportProgress の importPhase からステータステキストを取得
-    final statusText = _progress.importPhase.statusText;
+    final statusText = _getImportPhaseStatusText(l10n, _progress.importPhase);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -298,7 +304,7 @@ class _ImportDialogState extends State<ImportDialog> {
       children: [
         // デバイス情報
         Text(
-          '${widget.device.displayName} から$statusText',
+          l10n.import_fromDevice(widget.device.displayName, statusText),
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Colors.white70,
           ),
@@ -311,11 +317,37 @@ class _ImportDialogState extends State<ImportDialog> {
     );
   }
 
+  /// ImportPhase のローカライズされたステータステキストを取得
+  String _getImportPhaseStatusText(AppLocalizations l10n, ImportPhase phase) {
+    switch (phase) {
+      case ImportPhase.Initializing:
+        return l10n.enum_ImportPhase_Initializing_statusText;
+      case ImportPhase.ValidatingSDCard:
+        return l10n.enum_ImportPhase_ValidatingSDCard_statusText;
+      case ImportPhase.CheckingWritePermission:
+        return l10n.enum_ImportPhase_CheckingWritePermission_statusText;
+      case ImportPhase.ScanningMediaFiles:
+        return l10n.enum_ImportPhase_ScanningMediaFiles_statusText;
+      case ImportPhase.DeterminingTargets:
+        return l10n.enum_ImportPhase_DeterminingTargets_statusText;
+      case ImportPhase.ParsingExif:
+        return l10n.enum_ImportPhase_ParsingExif_statusText;
+      case ImportPhase.CheckingDestination:
+        return l10n.enum_ImportPhase_CheckingDestination_statusText;
+      case ImportPhase.CheckingDiskSpace:
+        return l10n.enum_ImportPhase_CheckingDiskSpace_statusText;
+      case ImportPhase.Importing:
+        return l10n.enum_ImportPhase_Importing_statusText;
+    }
+  }
+
   /// 結果表示を構築
   Widget _buildResult() {
     if (_result == null) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final l10n = AppLocalizations.of(context);
 
     // SingleChildScrollView でラップして、警告リスト展開時のオーバーフローを防ぐ
     return SingleChildScrollView(
@@ -330,7 +362,7 @@ class _ImportDialogState extends State<ImportDialog> {
           if (_result!.errorMessage != null) ...[
             const SizedBox(height: 16),
             Text(
-              '中断理由',
+              l10n.import_result_abortReason,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 color: Theme.of(context).colorScheme.error,
               ),
@@ -356,33 +388,59 @@ class _ImportDialogState extends State<ImportDialog> {
 
   /// ダイアログタイトルを取得
   String _getDialogTitle() {
+    final l10n = AppLocalizations.of(context);
+
     // プレビュー画面
     if (_phase == _ImportDialogPhase.preview) {
-      return '取り込み前プレビュー';
+      return l10n.import_dialog_preview;
     }
     // 完了画面
     if (_phase == _ImportDialogPhase.completed) {
       if (_result?.wasCancelled == true) {
-        return '取り込み中断';
+        return l10n.import_dialog_cancelled;
       }
       if ((_result?.errorCount ?? 0) > 0) {
-        return '取り込み中断';
+        return l10n.import_dialog_cancelled;
       }
-      return '取り込み完了';
+      return l10n.import_dialog_completed;
     }
     // 準備中または取り込み中: ImportProgress の importPhase に基づいてタイトルを表示
-    return _progress.importPhase.dialogTitle;
+    return _getImportPhaseDialogTitle(l10n, _progress.importPhase);
+  }
+
+  /// ImportPhase のローカライズされたダイアログタイトルを取得
+  String _getImportPhaseDialogTitle(AppLocalizations l10n, ImportPhase phase) {
+    switch (phase) {
+      case ImportPhase.Initializing:
+        return l10n.enum_ImportPhase_Initializing_dialogTitle;
+      case ImportPhase.ValidatingSDCard:
+        return l10n.enum_ImportPhase_ValidatingSDCard_dialogTitle;
+      case ImportPhase.CheckingWritePermission:
+        return l10n.enum_ImportPhase_CheckingWritePermission_dialogTitle;
+      case ImportPhase.ScanningMediaFiles:
+        return l10n.enum_ImportPhase_ScanningMediaFiles_dialogTitle;
+      case ImportPhase.DeterminingTargets:
+        return l10n.enum_ImportPhase_DeterminingTargets_dialogTitle;
+      case ImportPhase.ParsingExif:
+        return l10n.enum_ImportPhase_ParsingExif_dialogTitle;
+      case ImportPhase.CheckingDestination:
+        return l10n.enum_ImportPhase_CheckingDestination_dialogTitle;
+      case ImportPhase.CheckingDiskSpace:
+        return l10n.enum_ImportPhase_CheckingDiskSpace_dialogTitle;
+      case ImportPhase.Importing:
+        return l10n.enum_ImportPhase_Importing_dialogTitle;
+    }
   }
 
   /// キャンセル確認メッセージを取得
-  String _getCancelMessage() {
+  String _getCancelMessage(AppLocalizations l10n) {
     if (_phase == _ImportDialogPhase.preparing) {
-      return 'スキャンを中止してダイアログを閉じます。';
+      return l10n.import_cancelConfirm_preparing;
     }
     if (_phase == _ImportDialogPhase.preview) {
-      return '取り込みを開始せずにプレビューを閉じます。';
+      return l10n.import_cancelConfirm_preview;
     }
-    return '現在コピー中のファイルが完了してから停止します。';
+    return l10n.import_cancelConfirm_importing;
   }
 
   /// プレビュー画面を構築
@@ -392,13 +450,14 @@ class _ImportDialogState extends State<ImportDialog> {
     }
 
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '${widget.device.displayName} の取り込み対象: ${_plan!.items.length} 件',
+          l10n.import_previewTargetCount(widget.device.displayName, _plan!.items.length),
           style: theme.textTheme.bodyMedium?.copyWith(
             color: Colors.white70,
           ),
@@ -411,7 +470,7 @@ class _ImportDialogState extends State<ImportDialog> {
           child: ListView.separated(
             itemCount: _plan!.items.length,
             separatorBuilder: (context, index) => const Divider(height: 16),
-            itemBuilder: (context, index) => _buildPreviewItem(theme, _plan!.items[index]),
+            itemBuilder: (context, index) => _buildPreviewItem(theme, l10n, _plan!.items[index]),
           ),
         ),
       ],
@@ -419,17 +478,17 @@ class _ImportDialogState extends State<ImportDialog> {
   }
 
   /// プレビューの各項目を構築
-  Widget _buildPreviewItem(ThemeData theme, ImportPlanItem item) {
+  Widget _buildPreviewItem(ThemeData theme, AppLocalizations l10n, ImportPlanItem item) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '取り込み元: ${item.sourcePath}',
+          l10n.import_previewSource(item.sourcePath),
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 4),
         Text(
-          '取り込み先: ${item.destinationPath}',
+          l10n.import_previewDestination(item.destinationPath),
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
         ),
       ],
@@ -439,10 +498,11 @@ class _ImportDialogState extends State<ImportDialog> {
   /// 警告一覧を構築
   Widget _buildWarningsList() {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return ExpansionTile(
       title: Text(
-        '警告 (${_result!.warnings.length}件)',
+        l10n.import_result_warnings(_result!.warnings.length),
         style: theme.textTheme.titleSmall?.copyWith(
           color: Colors.orange,
         ),
@@ -480,40 +540,43 @@ class _ImportDialogState extends State<ImportDialog> {
 
   /// 取り込み中のアクションボタン
   List<Widget> _buildImportingActions() {
+    final l10n = AppLocalizations.of(context);
     return [
       TextButton(
         onPressed: _isCancelConfirming ? null : _requestCancel,
-        child: const Text('キャンセル'),
+        child: Text(l10n.button_cancel),
       ),
     ];
   }
 
   /// 完了後のアクションボタン
   List<Widget> _buildCompletedActions() {
+    final l10n = AppLocalizations.of(context);
     return [
       TextButton(
         onPressed: _openDestinationFolder,
-        child: const Text('保存先を開く'),
+        child: Text(l10n.button_openDestination),
       ),
       ElevatedButton.icon(
         onPressed: () => Navigator.pop(context),
         icon: const Icon(Icons.close),
-        label: const Text('閉じる'),
+        label: Text(l10n.button_close),
       ),
     ];
   }
 
   /// プレビュー時のアクションボタン
   List<Widget> _buildPreviewActions() {
+    final l10n = AppLocalizations.of(context);
     return [
       TextButton(
         onPressed: _isCancelConfirming ? null : _requestCancel,
-        child: const Text('キャンセル'),
+        child: Text(l10n.button_cancel),
       ),
       ElevatedButton.icon(
         onPressed: () => _startImport(plan: _plan),
         icon: const Icon(Icons.arrow_forward),
-        label: const Text('続行'),
+        label: Text(l10n.button_continue),
       ),
     ];
   }

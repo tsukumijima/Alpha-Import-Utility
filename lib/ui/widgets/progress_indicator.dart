@@ -5,6 +5,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/generated/app_localizations.dart';
 import '../../models/import_result.dart';
 import '../../models/media_file.dart';
 
@@ -23,27 +24,39 @@ class ImportProgressIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 全体進捗
-        _buildOverallProgress(context, theme),
+        _buildOverallProgress(context, theme, l10n),
 
         // 現在のファイル進捗
         if (progress.currentFile != null) const SizedBox(height: 24),
-        if (progress.currentFile != null) _buildCurrentFileProgress(context, theme),
+        if (progress.currentFile != null) _buildCurrentFileProgress(context, theme, l10n),
       ],
     );
   }
 
   /// 全体進捗を構築
-  Widget _buildOverallProgress(BuildContext context, ThemeData theme) {
+  Widget _buildOverallProgress(BuildContext context, ThemeData theme, AppLocalizations l10n) {
     final isIndeterminate = progress.totalCount == 0;
 
-    // 左側のラベル: スキャン中パスがあればそれを表示、なければ phase テキストを表示
+    // 左側のラベル:
+    // 1. スキャン中パスがあればそれを表示
+    // 2. phase が設定されていればそれを表示
+    // 3. どちらもなければ importPhase からローカライズテキストを取得
     final scanPath = progress.scanCurrentPath;
-    final leftLabel = scanPath != null && scanPath.isNotEmpty ? scanPath : progress.phase;
+    final phase = progress.phase;
+    String leftLabel;
+    if (scanPath != null && scanPath.isNotEmpty) {
+      leftLabel = scanPath;
+    } else if (phase != null && phase.isNotEmpty) {
+      leftLabel = phase;
+    } else {
+      leftLabel = _getImportPhaseStatusText(l10n, progress.importPhase);
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -54,7 +67,7 @@ class ImportProgressIndicator extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                leftLabel.isEmpty ? progress.importPhase.statusText : leftLabel,
+                leftLabel,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontSize: 15,
                   fontWeight: FontWeight.normal,
@@ -65,7 +78,7 @@ class ImportProgressIndicator extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Text(
-              _getProgressText(),
+              _getProgressText(l10n),
               style: theme.textTheme.titleMedium?.copyWith(
                 color: theme.colorScheme.primary,
                 fontSize: 15,
@@ -98,16 +111,42 @@ class ImportProgressIndicator extends StatelessWidget {
   }
 
   /// 進捗テキストを取得
-  String _getProgressText() {
+  String _getProgressText(AppLocalizations l10n) {
     if (progress.totalCount == 0) {
       // totalCount が 0 の場合はスキャン中
-      return progress.processedCount > 0 ? 'スキャン中（${progress.processedCount} 件）' : 'スキャン中...';
+      return progress.processedCount > 0
+          ? l10n.progress_scanningCount(progress.processedCount)
+          : l10n.progress_scanning;
     }
-    return '${progress.processedCount} / ${progress.totalCount} 件';
+    return l10n.progress_fileCount(progress.processedCount, progress.totalCount);
+  }
+
+  /// ImportPhase のローカライズされたステータステキストを取得
+  String _getImportPhaseStatusText(AppLocalizations l10n, ImportPhase phase) {
+    switch (phase) {
+      case ImportPhase.Initializing:
+        return l10n.enum_ImportPhase_Initializing_statusText;
+      case ImportPhase.ValidatingSDCard:
+        return l10n.enum_ImportPhase_ValidatingSDCard_statusText;
+      case ImportPhase.CheckingWritePermission:
+        return l10n.enum_ImportPhase_CheckingWritePermission_statusText;
+      case ImportPhase.ScanningMediaFiles:
+        return l10n.enum_ImportPhase_ScanningMediaFiles_statusText;
+      case ImportPhase.DeterminingTargets:
+        return l10n.enum_ImportPhase_DeterminingTargets_statusText;
+      case ImportPhase.ParsingExif:
+        return l10n.enum_ImportPhase_ParsingExif_statusText;
+      case ImportPhase.CheckingDestination:
+        return l10n.enum_ImportPhase_CheckingDestination_statusText;
+      case ImportPhase.CheckingDiskSpace:
+        return l10n.enum_ImportPhase_CheckingDiskSpace_statusText;
+      case ImportPhase.Importing:
+        return l10n.enum_ImportPhase_Importing_statusText;
+    }
   }
 
   /// 現在のファイル進捗を構築
-  Widget _buildCurrentFileProgress(BuildContext context, ThemeData theme) {
+  Widget _buildCurrentFileProgress(BuildContext context, ThemeData theme, AppLocalizations l10n) {
     final file = progress.currentFile!;
     final destinationPath = progress.currentDestinationPath;
 
@@ -166,7 +205,7 @@ class ImportProgressIndicator extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                file.type.displayName,
+                _getMediaTypeName(l10n, file.type),
                 style: theme.textTheme.bodySmall?.copyWith(color: Colors.white54),
               ),
               Text(
@@ -178,6 +217,26 @@ class ImportProgressIndicator extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// MediaType のローカライズされた表示名を取得
+  String _getMediaTypeName(AppLocalizations l10n, MediaType type) {
+    switch (type) {
+      case MediaType.JPEGPhoto:
+        return l10n.enum_MediaType_JPEGPhoto;
+      case MediaType.RAWPhoto:
+        return l10n.enum_MediaType_RAWPhoto;
+      case MediaType.HEIFPhoto:
+        return l10n.enum_MediaType_HEIFPhoto;
+      case MediaType.Video:
+        return l10n.enum_MediaType_Video;
+      case MediaType.ProxyVideo:
+        return l10n.enum_MediaType_ProxyVideo;
+      case MediaType.VideoMeta:
+        return l10n.enum_MediaType_VideoMeta;
+      case MediaType.Unknown:
+        return l10n.enum_MediaType_Unknown;
+    }
   }
 
   String _formatBytes(int bytes) {
@@ -203,6 +262,7 @@ class ImportResultSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,7 +278,7 @@ class ImportResultSummary extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                _getStatusMessage(),
+                _getStatusMessage(l10n),
                 style: theme.textTheme.titleLarge,
               ),
             ),
@@ -228,14 +288,14 @@ class ImportResultSummary extends StatelessWidget {
         const SizedBox(height: 24),
 
         // 結果サマリー
-        _buildResultRow(context, '成功', result.successCount, Colors.green),
+        _buildResultRow(context, l10n, l10n.result_success, result.successCount, Colors.green),
         const SizedBox(height: 8),
-        _buildResultRow(context, 'スキップ', result.skippedCount, Colors.white70),
+        _buildResultRow(context, l10n, l10n.result_skipped, result.skippedCount, Colors.white70),
         const SizedBox(height: 8),
-        _buildResultRow(context, '警告', result.warningCount, Colors.orange),
+        _buildResultRow(context, l10n, l10n.result_warning, result.warningCount, Colors.orange),
         if (result.errorCount > 0) ...[
           const SizedBox(height: 8),
-          _buildResultRow(context, 'エラー', result.errorCount, Colors.red),
+          _buildResultRow(context, l10n, l10n.result_error, result.errorCount, Colors.red),
         ],
 
         const SizedBox(height: 16),
@@ -244,14 +304,20 @@ class ImportResultSummary extends StatelessWidget {
 
         // 処理時間
         Text(
-          '処理時間: ${result.formattedDuration}',
+          l10n.result_duration(_formatDuration(l10n, result.duration)),
           style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
         ),
       ],
     );
   }
 
-  Widget _buildResultRow(BuildContext context, String label, int count, Color color) {
+  Widget _buildResultRow(
+    BuildContext context,
+    AppLocalizations l10n,
+    String label,
+    int count,
+    Color color,
+  ) {
     final theme = Theme.of(context);
 
     return Row(
@@ -259,11 +325,22 @@ class ImportResultSummary extends StatelessWidget {
       children: [
         Text(label, style: theme.textTheme.bodyLarge),
         Text(
-          '$count 件',
+          l10n.result_countUnit(count),
           style: theme.textTheme.bodyLarge?.copyWith(color: color, fontWeight: FontWeight.bold),
         ),
       ],
     );
+  }
+
+  /// 処理時間をローカライズされた形式でフォーマット
+  String _formatDuration(AppLocalizations l10n, Duration duration) {
+    if (duration.inHours > 0) {
+      return l10n.result_durationHoursMinutes(duration.inHours, duration.inMinutes.remainder(60));
+    } else if (duration.inMinutes > 0) {
+      return l10n.result_durationMinutesSeconds(duration.inMinutes, duration.inSeconds.remainder(60));
+    } else {
+      return l10n.result_durationSeconds(duration.inSeconds);
+    }
   }
 
   IconData _getStatusIcon() {
@@ -290,15 +367,15 @@ class ImportResultSummary extends StatelessWidget {
     }
   }
 
-  String _getStatusMessage() {
+  String _getStatusMessage(AppLocalizations l10n) {
     if (result.wasCancelled) {
-      return '取り込みがキャンセルされました';
+      return l10n.result_status_cancelled;
     } else if (result.errorCount > 0) {
-      return '取り込み中にエラーが発生しました';
+      return l10n.result_status_error;
     } else if (result.successCount == 0) {
-      return '新しいファイルはありませんでした';
+      return l10n.result_status_noNewFiles;
     } else {
-      return '取り込みが完了しました';
+      return l10n.result_status_completed;
     }
   }
 }

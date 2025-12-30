@@ -37,26 +37,6 @@ enum ImportWarningType {
 
 /// ImportWarningType の拡張メソッド
 extension ImportWarningTypeExtension on ImportWarningType {
-  /// 日本語での表示名
-  String get displayName {
-    switch (this) {
-      case ImportWarningType.DuplicateRenamed:
-        return '別名で保存';
-      case ImportWarningType.ExifReadFailed:
-        return 'EXIF 読み取り失敗';
-      case ImportWarningType.DateRestoreFailed:
-        return '日時復元失敗';
-      case ImportWarningType.HashVerificationFailed:
-        return 'ハッシュ検証失敗';
-      case ImportWarningType.MetadataUpdateSkipped:
-        return 'メタデータ更新スキップ';
-      case ImportWarningType.UnknownExtensionFound:
-        return '未知の拡張子';
-      case ImportWarningType.FileInUseSkipped:
-        return '使用中ファイルをスキップ';
-    }
-  }
-
   /// 警告の重要度（高いほど重要）
   int get severity {
     switch (this) {
@@ -98,7 +78,7 @@ class ImportWarning {
 
   @override
   String toString() {
-    return 'ImportWarning(type: ${type.displayName}, file: ${file.fileName}, message: $message)';
+    return 'ImportWarning(type: ${type.name}, file: ${file.fileName}, message: $message)';
   }
 }
 
@@ -421,31 +401,10 @@ class ImportResult {
   /// 処理が正常に完了したか
   bool get isSuccess => !wasCancelled && errorCount == 0;
 
-  /// 処理時間を人間が読みやすい形式で取得
-  String get formattedDuration {
-    if (duration.inHours > 0) {
-      return '${duration.inHours}時間${duration.inMinutes.remainder(60)}分';
-    } else if (duration.inMinutes > 0) {
-      return '${duration.inMinutes}分${duration.inSeconds.remainder(60)}秒';
-    } else {
-      return '${duration.inSeconds}秒';
-    }
-  }
-
-  /// 結果のサマリーを取得
-  String get summary {
-    final parts = <String>[];
-    if (successCount > 0) parts.add('成功: $successCount 件');
-    if (skippedCount > 0) parts.add('スキップ: $skippedCount 件');
-    if (warningCount > 0) parts.add('警告: $warningCount 件');
-    if (errorCount > 0) parts.add('エラー: $errorCount 件');
-    if (wasCancelled) parts.add('（キャンセル）');
-    return parts.join('、');
-  }
-
   @override
   String toString() {
-    return 'ImportResult($summary, duration: $formattedDuration)';
+    return 'ImportResult(success: $successCount, skipped: $skippedCount, warnings: $warningCount, '
+        'errors: $errorCount, duration: $duration, cancelled: $wasCancelled)';
   }
 }
 
@@ -538,62 +497,6 @@ enum ImportPhase {
   Importing,
 }
 
-/// ImportPhase の拡張メソッド
-extension ImportPhaseExtension on ImportPhase {
-  /// ダイアログタイトル用のテキストを取得
-  String get dialogTitle {
-    switch (this) {
-      case ImportPhase.Initializing:
-        return '準備中...';
-      case ImportPhase.ValidatingSDCard:
-        return 'SD カードを検証中...';
-      case ImportPhase.CheckingWritePermission:
-        return 'SD カードを検証中...';
-      case ImportPhase.ScanningMediaFiles:
-        return 'メディアをスキャン中...';
-      case ImportPhase.DeterminingTargets:
-        return '取り込み対象を判定中...';
-      case ImportPhase.ParsingExif:
-        return 'EXIF を解析中...';
-      case ImportPhase.CheckingDestination:
-        return '保存先を確認中...';
-      case ImportPhase.CheckingDiskSpace:
-        return '容量を確認中...';
-      case ImportPhase.Importing:
-        return '取り込み中...';
-    }
-  }
-
-  /// ステータステキストを取得
-  String get statusText {
-    switch (this) {
-      case ImportPhase.Initializing:
-        return '準備中...';
-      case ImportPhase.ValidatingSDCard:
-        return 'SD カード構造を検証中...';
-      case ImportPhase.CheckingWritePermission:
-        return '書き込み可能性を確認中...';
-      case ImportPhase.ScanningMediaFiles:
-        return 'スキャン中...';
-      case ImportPhase.DeterminingTargets:
-        return '取り込み対象を判定中...';
-      case ImportPhase.ParsingExif:
-        return 'EXIF を解析中...';
-      case ImportPhase.CheckingDestination:
-        return '保存先を確認中...';
-      case ImportPhase.CheckingDiskSpace:
-        return '容量を確認中...';
-      case ImportPhase.Importing:
-        return 'コピー中...';
-    }
-  }
-
-  /// このフェーズが準備段階か（実際のファイルコピー前）
-  bool get isPreparationPhase {
-    return this != ImportPhase.Importing;
-  }
-}
-
 /// 取り込み進捗の状態
 class ImportProgress {
   /// 現在の処理フェーズ
@@ -618,7 +521,10 @@ class ImportProgress {
   final int currentFileTotalBytes;
 
   /// 処理フェーズの説明（詳細な説明用、importPhase と併用）
-  final String phase;
+  ///
+  /// 通常は null。特殊なケースで詳細メッセージを表示したい場合にのみ設定する。
+  /// null または空文字の場合、UI は importPhase からローカライズされたテキストを取得する。
+  final String? phase;
 
   /// スキャン中の現在ファイルパス
   final String? scanCurrentPath;
@@ -634,7 +540,7 @@ class ImportProgress {
     this.currentFileProgress = 0.0,
     this.currentFileCopiedBytes = 0,
     this.currentFileTotalBytes = 0,
-    this.phase = '',
+    this.phase,
     this.scanCurrentPath,
     this.currentDestinationPath,
   });
@@ -645,7 +551,6 @@ class ImportProgress {
       importPhase: ImportPhase.Initializing,
       processedCount: 0,
       totalCount: 0,
-      phase: '準備中...',
     );
   }
 
@@ -653,12 +558,13 @@ class ImportProgress {
   factory ImportProgress.scanning({
     int processedCount = 0,
     String? scanCurrentPath,
+    String? phase,
   }) {
     return ImportProgress(
       importPhase: ImportPhase.ScanningMediaFiles,
       processedCount: processedCount,
       totalCount: 0,
-      phase: 'スキャン中...',
+      phase: phase,
       scanCurrentPath: scanCurrentPath,
     );
   }
@@ -669,7 +575,7 @@ class ImportProgress {
     required int processedCount,
     required int totalCount,
     String? currentPath,
-    String phase = '取り込み対象を確定中...',
+    String? phase,
   }) {
     return ImportProgress(
       importPhase: importPhase,
@@ -686,18 +592,11 @@ class ImportProgress {
     return processedCount / totalCount;
   }
 
-  /// 進捗テキスト（例: '15 / 128 件'）
-  String get progressText {
-    if (totalCount == 0) {
-      return processedCount > 0 ? 'スキャン中（$processedCount 件）' : 'スキャン中...';
-    }
-    return '$processedCount / $totalCount 件';
-  }
-
   /// 新しいファイルの処理を開始
   ImportProgress startFile(
     MediaFile file, {
     String? destinationPath,
+    String? phase,
   }) {
     return ImportProgress(
       importPhase: ImportPhase.Importing,
@@ -707,8 +606,7 @@ class ImportProgress {
       currentFileProgress: 0.0,
       currentFileCopiedBytes: 0,
       currentFileTotalBytes: file.fileSize,
-      phase: 'コピー中...',
-      scanCurrentPath: null,
+      phase: phase,
       currentDestinationPath: destinationPath,
     );
   }
@@ -748,6 +646,6 @@ class ImportProgress {
 
   @override
   String toString() {
-    return 'ImportProgress($progressText, phase: $phase)';
+    return 'ImportProgress(processed: $processedCount, total: $totalCount, phase: $phase)';
   }
 }

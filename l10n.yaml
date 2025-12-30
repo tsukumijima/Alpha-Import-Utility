@@ -1,0 +1,20 @@
+# Flutter Localization 設定
+# ARB ファイルからローカライゼーションコードを自動生成する
+
+# ARB ファイルの配置ディレクトリ
+arb-dir: lib/l10n
+
+# テンプレートとなる ARB ファイル（日本語をベースにする）
+template-arb-file: app_ja.arb
+
+# 生成されるローカライゼーションクラスのファイル名
+output-localization-file: app_localizations.dart
+
+# 生成されるローカライゼーションクラス名
+output-class: AppLocalizations
+
+# 生成コードの出力先ディレクトリ
+output-dir: lib/l10n/generated
+
+# null 許容 getter を無効化（翻訳取得時に null を返さない）
+nullable-getter: false

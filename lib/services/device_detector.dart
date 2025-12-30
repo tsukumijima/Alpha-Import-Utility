@@ -80,21 +80,6 @@ class DetectedDevice {
     return _formatBytes(usedSize!);
   }
 
-  /// 容量情報を「全体 (使用済み / 空き)」形式で取得
-  String? get formattedSizeDetail {
-    if (totalSize == null) return null;
-
-    final total = _formatBytes(totalSize!);
-
-    if (usedSize != null && freeSize != null) {
-      final used = _formatBytes(usedSize!);
-      final free = _formatBytes(freeSize!);
-      return '$total（使用: $used / 空き: $free）';
-    }
-
-    return total;
-  }
-
   String _formatBytes(int bytes) {
     if (bytes < 1024) {
       return '$bytes B';

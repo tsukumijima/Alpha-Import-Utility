@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../l10n/generated/app_localizations.dart';
 import '../models/github_release.dart';
 import '../utils/version_utils.dart';
 import 'logging_service.dart';
@@ -90,7 +91,7 @@ class UpdateCheckService {
   /// チェック中の場合は完了を待機する。
   /// ネットワークエラーや API エラーは握りつぶし、
   /// エラー情報を含む結果を返す（アプリの動作を妨げない）。
-  Future<UpdateCheckResult> checkForUpdates({bool isForceCheck = false}) async {
+  Future<UpdateCheckResult> checkForUpdates({bool isForceCheck = false, AppLocalizations? l10n}) async {
     // 強制チェックでない場合、キャッシュがあればそれを返す
     if (!isForceCheck && _cachedResult != null) {
       _log.debug('Returning cached update check result.', tag: 'UpdateCheck');
@@ -108,7 +109,7 @@ class UpdateCheckService {
     _log.info('Checking for updates.', tag: 'UpdateCheck');
 
     try {
-      final result = await _performUpdateCheck();
+      final result = await _performUpdateCheck(l10n);
       _cachedResult = result;
       _checkCompleter!.complete(result);
       return result;
@@ -133,7 +134,11 @@ class UpdateCheckService {
       final errorResult = UpdateCheckResult(
         isUpdateAvailable: false,
         currentVersion: currentVersion,
-        errorMessage: 'アップデートの確認に失敗しました。',
+        errorMessage: _resolveUpdateErrorMessage(
+          l10n,
+          (l10n) => l10n.update_error_checkFailed,
+          'Failed to check for updates.',
+        ),
       );
       _cachedResult = errorResult;
       _checkCompleter!.complete(errorResult);
@@ -144,7 +149,7 @@ class UpdateCheckService {
   }
 
   /// 実際のアップデートチェック処理を行う
-  Future<UpdateCheckResult> _performUpdateCheck() async {
+  Future<UpdateCheckResult> _performUpdateCheck(AppLocalizations? l10n) async {
     // 現在のバージョンを取得
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = packageInfo.version;
@@ -208,7 +213,11 @@ class UpdateCheckService {
       return UpdateCheckResult(
         isUpdateAvailable: false,
         currentVersion: currentVersion,
-        errorMessage: 'リリースが見つかりませんでした。',
+        errorMessage: _resolveUpdateErrorMessage(
+          l10n,
+          (l10n) => l10n.update_error_releaseNotFound,
+          'No releases found.',
+        ),
       );
     } else {
       // その他の API エラー
@@ -219,9 +228,24 @@ class UpdateCheckService {
       return UpdateCheckResult(
         isUpdateAvailable: false,
         currentVersion: currentVersion,
-        errorMessage: 'GitHub API エラー (${response.statusCode})',
+        errorMessage: _resolveUpdateErrorMessage(
+          l10n,
+          (l10n) => l10n.update_error_apiFailed(response.statusCode),
+          'GitHub API error (${response.statusCode})',
+        ),
       );
     }
+  }
+
+  /// エラーメッセージをローカライズして取得
+  ///
+  /// l10n が利用できない場合は [fallback] を返す。
+  String _resolveUpdateErrorMessage(
+    AppLocalizations? l10n,
+    String Function(AppLocalizations l10n) resolver,
+    String fallback,
+  ) {
+    return l10n != null ? resolver(l10n) : fallback;
   }
 
   /// キャッシュをクリア

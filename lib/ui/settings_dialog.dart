@@ -7,12 +7,47 @@ library;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../app.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../models/settings.dart';
 import '../services/logging_service.dart';
 import '../utils/timezone_utils.dart';
 
 /// サポートするタイムゾーンのリストを参照するためのエイリアス
 const _supportedTimezones = supportedTimezones;
+
+/// タイムゾーン ID からローカライズされた表示名を取得するためのマップ
+///
+/// 各エントリは タイムゾーン ID をキーとし、AppLocalizations から
+/// ローカライズされた名前を返す関数を値として持つ。
+final _timezoneNameGetters = <String, String Function(AppLocalizations)>{
+  'Pacific/Honolulu': (l10n) => l10n.tz_honolulu,
+  'America/Anchorage': (l10n) => l10n.tz_anchorage,
+  'America/Los_Angeles': (l10n) => l10n.tz_losAngeles,
+  'America/Denver': (l10n) => l10n.tz_denver,
+  'America/Chicago': (l10n) => l10n.tz_chicago,
+  'America/New_York': (l10n) => l10n.tz_newYork,
+  'America/Sao_Paulo': (l10n) => l10n.tz_saoPaulo,
+  'Atlantic/Azores': (l10n) => l10n.tz_azores,
+  'UTC': (l10n) => l10n.tz_utc,
+  'Europe/London': (l10n) => l10n.tz_london,
+  'Europe/Paris': (l10n) => l10n.tz_paris,
+  'Europe/Berlin': (l10n) => l10n.tz_berlin,
+  'Europe/Athens': (l10n) => l10n.tz_athens,
+  'Europe/Moscow': (l10n) => l10n.tz_moscow,
+  'Asia/Dubai': (l10n) => l10n.tz_dubai,
+  'Asia/Karachi': (l10n) => l10n.tz_karachi,
+  'Asia/Kolkata': (l10n) => l10n.tz_kolkata,
+  'Asia/Dhaka': (l10n) => l10n.tz_dhaka,
+  'Asia/Bangkok': (l10n) => l10n.tz_bangkok,
+  'Asia/Singapore': (l10n) => l10n.tz_singapore,
+  'Asia/Hong_Kong': (l10n) => l10n.tz_hongKong,
+  'Asia/Shanghai': (l10n) => l10n.tz_shanghai,
+  'Asia/Tokyo': (l10n) => l10n.tz_tokyo,
+  'Asia/Seoul': (l10n) => l10n.tz_seoul,
+  'Australia/Sydney': (l10n) => l10n.tz_sydney,
+  'Pacific/Auckland': (l10n) => l10n.tz_auckland,
+};
 
 /// 設定ダイアログウィジェット
 class SettingsDialog extends StatefulWidget {
@@ -29,6 +64,9 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
   /// 編集中の設定
   late ImportSettings _settings;
 
+  /// ダイアログ表示時の元の設定（変更検出・キャンセル時の復元用）
+  late ImportSettings _originalSettings;
+
   /// 保存先フォルダのテキストコントローラー
   late TextEditingController _destinationController;
 
@@ -39,6 +77,7 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
   void initState() {
     super.initState();
     _settings = widget.settings;
+    _originalSettings = widget.settings;
     _destinationController = TextEditingController(text: _settings.destinationFolder);
     _tabController = TabController(length: 2, vsync: this);
   }
@@ -50,14 +89,43 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
     super.dispose();
   }
 
+  /// 設定が変更されたかどうかを判定
+  bool get _hasChanges {
+    return _settings.language != _originalSettings.language ||
+        _settings.destinationFolder != _originalSettings.destinationFolder ||
+        _settings.subfolderPattern != _originalSettings.subfolderPattern ||
+        _settings.dateFormat != _originalSettings.dateFormat ||
+        _settings.dateSeparator != _originalSettings.dateSeparator ||
+        _settings.isShowImportPreview != _originalSettings.isShowImportPreview ||
+        _settings.isRestoreDateTimeFromExif != _originalSettings.isRestoreDateTimeFromExif ||
+        _settings.cameraTimezone != _originalSettings.cameraTimezone ||
+        _settings.isImportVideoXML != _originalSettings.isImportVideoXML ||
+        _settings.isImportProxyVideos != _originalSettings.isImportProxyVideos;
+  }
+
+  /// キャンセル時の処理
+  ///
+  /// 言語が変更されていた場合は元の言語に戻す。
+  void _handleCancel() {
+    _restoreLanguageIfNeeded();
+    Navigator.pop(context);
+  }
+
+  /// 言語が変更されていた場合は元の言語に戻す
+  void _restoreLanguageIfNeeded() {
+    if (_settings.language != _originalSettings.language) {
+      AlphaImportUtilityApp.updateLocale(_originalSettings.language.locale);
+    }
+  }
+
   /// 保存先フォルダを選択
-  Future<void> _selectDestinationFolder() async {
+  Future<void> _selectDestinationFolder(AppLocalizations l10n) async {
     final log = LoggingService.instance;
     log.info('Opening destination folder picker.', tag: 'SettingsDialog');
 
     try {
       final result = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: '保存先フォルダを選択',
+        dialogTitle: l10n.settings_destinationFolder_picker,
         initialDirectory: _settings.destinationFolder.isNotEmpty ? _settings.destinationFolder : null,
       );
 
@@ -79,129 +147,152 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 600),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ダイアログヘッダー
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-              child: Row(
-                children: [
-                  Icon(Icons.settings, color: theme.colorScheme.primary),
-                  const SizedBox(width: 12),
-                  Text('設定', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-                ],
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          _restoreLanguageIfNeeded();
+        }
+      },
+      child: Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ダイアログヘッダー
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.settings, color: theme.colorScheme.primary),
+                    const SizedBox(width: 12),
+                    Text(l10n.settings_title, style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+                  ],
+                ),
               ),
-            ),
 
-            // タブバー
-            TabBar(
-              controller: _tabController,
-              tabs: const [
-                Tab(text: '基本設定'),
-                Tab(text: '取り込みオプション'),
-              ],
-            ),
-
-            // タブコンテンツ
-            Flexible(
-              child: TabBarView(
+              // タブバー
+              TabBar(
                 controller: _tabController,
-                children: [
-                  _buildBasicSettingsTab(theme),
-                  _buildOptionsTab(theme),
+                tabs: [
+                  Tab(text: l10n.settings_tab_basic),
+                  Tab(text: l10n.settings_tab_options),
                 ],
               ),
-            ),
 
-            // アクションボタン
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('キャンセル'),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: _settings.hasDestinationFolder ? () => Navigator.pop(context, _settings) : null,
-                    icon: const Icon(Icons.save),
-                    label: const Text('保存'),
-                  ),
-                ],
+              // タブコンテンツ
+              Flexible(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildBasicSettingsTab(theme, l10n),
+                    _buildOptionsTab(theme, l10n),
+                  ],
+                ),
               ),
-            ),
-          ],
+
+              // アクションボタン
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _handleCancel,
+                      child: Text(l10n.button_cancel),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      // 保存先が設定済みかつ変更がある場合のみ有効
+                      onPressed: _settings.hasDestinationFolder && _hasChanges
+                          ? () => Navigator.pop(context, _settings)
+                          : null,
+                      icon: const Icon(Icons.save),
+                      label: Text(l10n.button_save),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   /// 基本設定タブを構築
-  Widget _buildBasicSettingsTab(ThemeData theme) {
+  Widget _buildBasicSettingsTab(ThemeData theme, AppLocalizations l10n) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 保存先フォルダ
-          _buildSectionTitle(theme, '保存先フォルダ'),
+          // 言語設定（最上部に配置）
+          _buildSectionTitle(theme, l10n.settings_language_title),
           const SizedBox(height: 6),
           Text(
-            '取り込んだ写真・動画を保存するフォルダを指定します。',
+            l10n.settings_language_description,
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
           ),
           const SizedBox(height: 20),
-          _buildDestinationFolder(),
+          _buildLanguageSettings(l10n),
+
+          const SizedBox(height: 28),
+
+          // 保存先フォルダ
+          _buildSectionTitle(theme, l10n.settings_destinationFolder_title),
+          const SizedBox(height: 6),
+          Text(
+            l10n.settings_destinationFolder_description,
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
+          ),
+          const SizedBox(height: 20),
+          _buildDestinationFolder(l10n),
 
           const SizedBox(height: 28),
 
           // サブフォルダ設定
-          _buildSectionTitle(theme, 'サブフォルダ設定'),
+          _buildSectionTitle(theme, l10n.settings_subfolder_title),
           const SizedBox(height: 6),
           Text(
-            '撮影日ごとにサブフォルダを作成するパターンを選択します。',
+            l10n.settings_subfolder_description,
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
           ),
           const SizedBox(height: 20),
-          _buildSubfolderSettings(),
+          _buildSubfolderSettings(l10n),
 
           const SizedBox(height: 28),
 
           // 日付フォーマット
-          _buildSectionTitle(theme, '日付フォーマット'),
+          _buildSectionTitle(theme, l10n.settings_dateFormat_title),
           const SizedBox(height: 6),
           Text(
-            'サブフォルダ名に使用する日付の表記形式を指定します。',
+            l10n.settings_dateFormat_description,
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
           ),
           const SizedBox(height: 20),
-          _buildDateFormatSettings(),
+          _buildDateFormatSettings(l10n),
 
           const SizedBox(height: 24),
 
           // プレビュー
-          _buildPreview(theme),
+          _buildPreview(theme, l10n),
 
           const SizedBox(height: 28),
 
           // 取り込み前プレビュー
-          _buildSectionTitle(theme, '取り込み前プレビュー'),
+          _buildSectionTitle(theme, l10n.settings_importPreview_title),
           const SizedBox(height: 6),
           Text(
-            'スキャン完了後に取り込み対象の一覧を表示し、続行するか確認します。',
+            l10n.settings_importPreview_description,
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
           ),
           const SizedBox(height: 6),
           SwitchListTile(
-            title: const Text('取り込み前にプレビューを表示'),
+            title: Text(l10n.settings_importPreview_switch),
             value: _settings.isShowImportPreview,
             contentPadding: EdgeInsets.zero,
             onChanged: (value) {
@@ -216,22 +307,22 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
   }
 
   /// オプションタブを構築
-  Widget _buildOptionsTab(ThemeData theme) {
+  Widget _buildOptionsTab(ThemeData theme, AppLocalizations l10n) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle(theme, 'ファイル日時の復元'),
+          _buildSectionTitle(theme, l10n.settings_dateRestore_title),
           const SizedBox(height: 6),
           Text(
-            'コピー後のファイルの作成日時・更新日時を、EXIF に記録された撮影日時に合わせます。',
+            l10n.settings_dateRestore_description,
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
           ),
           const SizedBox(height: 6),
           SwitchListTile(
-            title: const Text('EXIF から日時を復元'),
+            title: Text(l10n.settings_dateRestore_switch),
             value: _settings.isRestoreDateTimeFromExif,
             contentPadding: EdgeInsets.zero,
             onChanged: (value) {
@@ -244,30 +335,26 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
           const Divider(height: 32),
 
           // カメラタイムゾーン
-          _buildSectionTitle(theme, 'カメラタイムゾーン'),
+          _buildSectionTitle(theme, l10n.settings_timezone_title),
           const SizedBox(height: 6),
           Text(
-            'ファイル日時の復元時に利用する、カメラに設定されているタイムゾーンを指定します。\n'
-            'EXIF にタイムゾーン情報が含まれている場合は、その値を優先します。\n'
-            'EXIF にタイムゾーン情報がない場合のみ、この設定がフォールバックとして利用されます。\n'
-            '日本国内で使用している場合は「東京」を選択してください。',
+            l10n.settings_timezone_description,
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
           ),
           const SizedBox(height: 20),
-          _buildTimezoneSettings(),
+          _buildTimezoneSettings(l10n),
 
           const Divider(height: 32),
 
-          _buildSectionTitle(theme, '動画メタデータ'),
+          _buildSectionTitle(theme, l10n.settings_videoMeta_title),
           const SizedBox(height: 6),
           Text(
-            '動画ファイル (.MP4) に付随する XML メタデータ (例: C0001M01.XML) も取り込みます。\n'
-            '動画単体で利活用する分には不要ですが、ソニー純正ソフトとの互換性のため、取り込むことを推奨します。',
+            l10n.settings_videoMeta_description,
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
           ),
           const SizedBox(height: 6),
           SwitchListTile(
-            title: const Text('動画メタデータ (XML) を取り込む'),
+            title: Text(l10n.settings_videoMeta_switch),
             value: _settings.isImportVideoXML,
             contentPadding: EdgeInsets.zero,
             onChanged: (value) {
@@ -279,16 +366,15 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
 
           const Divider(height: 32),
 
-          _buildSectionTitle(theme, 'プロキシー動画'),
+          _buildSectionTitle(theme, l10n.settings_proxyVideo_title),
           const SizedBox(height: 6),
           Text(
-            'オリジナルの動画ファイルと同時に生成された、低解像度のプロキシー動画\n'
-            '(PRIVATE/M4ROOT/SUB/ フォルダ内) も取り込みます。',
+            l10n.settings_proxyVideo_description,
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white60),
           ),
           const SizedBox(height: 6),
           SwitchListTile(
-            title: const Text('プロキシー動画を取り込む'),
+            title: Text(l10n.settings_proxyVideo_switch),
             value: _settings.isImportProxyVideos,
             contentPadding: EdgeInsets.zero,
             onChanged: (value) {
@@ -313,41 +399,76 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
     );
   }
 
+  /// 言語設定を構築
+  Widget _buildLanguageSettings(AppLocalizations l10n) {
+    return DropdownButtonFormField<AppLanguage>(
+      initialValue: _settings.language,
+      decoration: InputDecoration(
+        labelText: l10n.settings_language_label,
+      ),
+      items: AppLanguage.values.map((lang) {
+        return DropdownMenuItem(
+          value: lang,
+          child: Text(_getLanguageName(l10n, lang)),
+        );
+      }).toList(),
+      onChanged: (value) {
+        if (value != null) {
+          setState(() {
+            _settings = _settings.copyWith(language: value);
+          });
+          // 即座にロケールを変更
+          AlphaImportUtilityApp.updateLocale(value.locale);
+        }
+      },
+    );
+  }
+
+  /// 言語の表示名をローカライズして取得
+  String _getLanguageName(AppLocalizations l10n, AppLanguage language) {
+    switch (language) {
+      case AppLanguage.Japanese:
+        return l10n.settings_language_option_japanese;
+      case AppLanguage.English:
+        return l10n.settings_language_option_english;
+    }
+  }
+
   /// 保存先フォルダ設定を構築
-  Widget _buildDestinationFolder() {
+  Widget _buildDestinationFolder(AppLocalizations l10n) {
     return Row(
       children: [
         Expanded(
           child: TextField(
             controller: _destinationController,
             readOnly: true,
-            decoration: const InputDecoration(
-              hintText: 'フォルダを選択してください',
+            decoration: InputDecoration(
+              hintText: l10n.settings_destinationFolder_hint,
               prefixIcon: Icon(Icons.folder),
             ),
           ),
         ),
         const SizedBox(width: 8),
         IconButton(
-          onPressed: _selectDestinationFolder,
+          onPressed: () => _selectDestinationFolder(l10n),
           icon: const Icon(Icons.folder_open),
-          tooltip: 'フォルダを選択',
+          tooltip: l10n.tooltip_selectFolder,
         ),
       ],
     );
   }
 
   /// サブフォルダ設定を構築
-  Widget _buildSubfolderSettings() {
+  Widget _buildSubfolderSettings(AppLocalizations l10n) {
     return DropdownButtonFormField<SubfolderPattern>(
       initialValue: _settings.subfolderPattern,
-      decoration: const InputDecoration(
-        labelText: 'パターン',
+      decoration: InputDecoration(
+        labelText: l10n.settings_subfolder_label,
       ),
       items: SubfolderPattern.values.map((pattern) {
         return DropdownMenuItem(
           value: pattern,
-          child: Text(pattern.displayName),
+          child: Text(_getSubfolderPatternName(l10n, pattern)),
         );
       }).toList(),
       onChanged: (value) {
@@ -360,20 +481,32 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
     );
   }
 
+  /// SubfolderPattern のローカライズされた表示名を取得
+  String _getSubfolderPatternName(AppLocalizations l10n, SubfolderPattern pattern) {
+    switch (pattern) {
+      case SubfolderPattern.DateOnly:
+        return l10n.enum_SubfolderPattern_DateOnly;
+      case SubfolderPattern.YearAndDate:
+        return l10n.enum_SubfolderPattern_YearAndDate;
+      case SubfolderPattern.YearMonthAndDate:
+        return l10n.enum_SubfolderPattern_YearMonthAndDate;
+    }
+  }
+
   /// 日付フォーマット設定を構築
-  Widget _buildDateFormatSettings() {
+  Widget _buildDateFormatSettings(AppLocalizations l10n) {
     return Column(
       children: [
         // 日付フォーマット
         DropdownButtonFormField<DateFormatStyle>(
           initialValue: _settings.dateFormat,
-          decoration: const InputDecoration(
-            labelText: '年の形式',
+          decoration: InputDecoration(
+            labelText: l10n.settings_dateFormat_yearLabel,
           ),
           items: DateFormatStyle.values.map((format) {
             return DropdownMenuItem(
               value: format,
-              child: Text(format.displayName),
+              child: Text(_getDateFormatStyleName(l10n, format)),
             );
           }).toList(),
           onChanged: (value) {
@@ -390,13 +523,13 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
         // 区切り文字
         DropdownButtonFormField<DateSeparator>(
           initialValue: _settings.dateSeparator,
-          decoration: const InputDecoration(
-            labelText: '区切り文字',
+          decoration: InputDecoration(
+            labelText: l10n.settings_dateFormat_separatorLabel,
           ),
           items: DateSeparator.values.map((separator) {
             return DropdownMenuItem(
               value: separator,
-              child: Text(separator.displayName),
+              child: Text(_getDateSeparatorName(l10n, separator)),
             );
           }).toList(),
           onChanged: (value) {
@@ -411,8 +544,30 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
     );
   }
 
+  /// DateFormatStyle のローカライズされた表示名を取得
+  String _getDateFormatStyleName(AppLocalizations l10n, DateFormatStyle format) {
+    switch (format) {
+      case DateFormatStyle.YYYYMMDD:
+        return l10n.enum_DateFormatStyle_YYYYMMDD;
+      case DateFormatStyle.YYMMDD:
+        return l10n.enum_DateFormatStyle_YYMMDD;
+    }
+  }
+
+  /// DateSeparator のローカライズされた表示名を取得
+  String _getDateSeparatorName(AppLocalizations l10n, DateSeparator separator) {
+    switch (separator) {
+      case DateSeparator.None:
+        return l10n.enum_DateSeparator_None;
+      case DateSeparator.Underscore:
+        return l10n.enum_DateSeparator_Underscore;
+      case DateSeparator.Hyphen:
+        return l10n.enum_DateSeparator_Hyphen;
+    }
+  }
+
   /// プレビューを構築
-  Widget _buildPreview(ThemeData theme) {
+  Widget _buildPreview(ThemeData theme, AppLocalizations l10n) {
     final examplePath = _settings.subfolderPattern.getExample(
       _settings.dateFormat,
       _settings.dateSeparator,
@@ -429,12 +584,12 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'プレビュー',
+            l10n.settings_preview_title,
             style: theme.textTheme.labelSmall?.copyWith(color: Colors.white54),
           ),
           const SizedBox(height: 8),
           Text(
-            '${_settings.destinationFolder.isNotEmpty ? _settings.destinationFolder : '(保存先未設定)'}/',
+            '${_settings.destinationFolder.isNotEmpty ? _settings.destinationFolder : l10n.settings_destinationFolder_notSet}/',
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
           ),
           Text(
@@ -451,7 +606,7 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
   }
 
   /// タイムゾーン設定を構築
-  Widget _buildTimezoneSettings() {
+  Widget _buildTimezoneSettings(AppLocalizations l10n) {
     // 現在の設定値がリストにあるか確認
     final currentTimezone = _supportedTimezones.firstWhere(
       (tz) => tz.id == _settings.cameraTimezone,
@@ -460,13 +615,13 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
 
     return DropdownButtonFormField<String>(
       initialValue: currentTimezone.id,
-      decoration: const InputDecoration(
-        labelText: 'タイムゾーン',
+      decoration: InputDecoration(
+        labelText: l10n.settings_timezone_label,
       ),
       items: _supportedTimezones.map((tz) {
         return DropdownMenuItem(
           value: tz.id,
-          child: Text('${tz.name} (${tz.offset})'),
+          child: Text('${_getTimezoneName(l10n, tz.id)} (${tz.offset})'),
         );
       }).toList(),
       onChanged: (value) {
@@ -477,5 +632,14 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
         }
       },
     );
+  }
+
+  /// タイムゾーン ID からローカライズされた表示名を取得
+  ///
+  /// [timezoneId] が [_timezoneNameGetters] に存在する場合はローカライズされた
+  /// 名前を返し、存在しない場合はタイムゾーン ID をそのまま返す。
+  String _getTimezoneName(AppLocalizations l10n, String timezoneId) {
+    final getter = _timezoneNameGetters[timezoneId];
+    return getter != null ? getter(l10n) : timezoneId;
   }
 }

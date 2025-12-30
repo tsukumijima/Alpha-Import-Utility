@@ -65,5 +65,5 @@ void main() async {
 
   LoggingService.instance.info('Window ready, starting application.', tag: 'Main');
 
-  runApp(const AlphaImportUtilityApp());
+  runApp(AlphaImportUtilityApp());
 }

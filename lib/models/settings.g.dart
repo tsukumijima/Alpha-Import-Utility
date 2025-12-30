@@ -22,6 +22,7 @@ ImportSettings _$ImportSettingsFromJson(Map<String, dynamic> json) => ImportSett
   cameraTimezone: json['cameraTimezone'] as String? ?? 'Asia/Tokyo',
   isImportVideoXML: json['isImportVideoXML'] as bool? ?? true,
   isImportProxyVideos: json['isImportProxyVideos'] as bool? ?? true,
+  language: $enumDecodeNullable(_$AppLanguageEnumMap, json['language']) ?? AppLanguage.Japanese,
 );
 
 Map<String, dynamic> _$ImportSettingsToJson(ImportSettings instance) => <String, dynamic>{
@@ -35,6 +36,7 @@ Map<String, dynamic> _$ImportSettingsToJson(ImportSettings instance) => <String,
   'cameraTimezone': instance.cameraTimezone,
   'isImportVideoXML': instance.isImportVideoXML,
   'isImportProxyVideos': instance.isImportProxyVideos,
+  'language': _$AppLanguageEnumMap[instance.language]!,
 };
 
 const _$SubfolderPatternEnumMap = {
@@ -52,6 +54,11 @@ const _$DateSeparatorEnumMap = {
   DateSeparator.None: 'None',
   DateSeparator.Underscore: 'Underscore',
   DateSeparator.Hyphen: 'Hyphen',
+};
+
+const _$AppLanguageEnumMap = {
+  AppLanguage.Japanese: 'Japanese',
+  AppLanguage.English: 'English',
 };
 
 WindowSettings _$WindowSettingsFromJson(Map<String, dynamic> json) => WindowSettings(

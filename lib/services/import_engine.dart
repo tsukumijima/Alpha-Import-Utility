@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 
+import '../l10n/generated/app_localizations.dart';
 import '../models/import_result.dart';
 import '../models/media_file.dart';
 import '../models/settings.dart';
@@ -29,6 +30,9 @@ class ImportEngine {
 
   /// 取り込み設定
   final ImportSettings settings;
+
+  /// ローカライズ用リソース
+  final AppLocalizations? _l10n;
 
   /// Sony ファイルシステムサービス
   late final SonyFilesystemService _sonyFs;
@@ -51,7 +55,8 @@ class ImportEngine {
   ImportEngine({
     required this.sdCardRoot,
     required this.settings,
-  }) {
+    AppLocalizations? l10n,
+  }) : _l10n = l10n {
     _sonyFs = SonyFilesystemService(sdCardRoot);
     _metadataManager = MetadataManager(sdCardRoot);
     _appVersionFuture = _loadAppVersion();
@@ -117,7 +122,7 @@ class ImportEngine {
           importPhase: ImportPhase.CheckingDiskSpace,
           processedCount: 0,
           totalCount: 0,
-          phase: '保存先の容量を確認中...',
+          phase: _phaseCheckingDiskSpace(),
         ),
       );
       final totalSize = importPlan.totalSize;
@@ -130,15 +135,15 @@ class ImportEngine {
       if (availableSpace == null) {
         _log.error('Failed to read disk space for destination folder.', tag: 'ImportEngine');
         throw ImportFatalException(
-          '保存先の空き容量を取得できないため取り込みを中断しました。',
+          'Import aborted: Failed to read available disk space.',
+          errorType: ImportFatalErrorType.DiskSpaceReadFailed,
         );
       }
 
       if (availableSpace < totalSize) {
         _log.error('Insufficient disk space.', tag: 'ImportEngine');
         return ImportResult.error(
-          errorMessage:
-              '保存先の空き容量が不足しているため取り込みを中断しました。必要: ${formatFileSize(totalSize)}、空き: ${formatFileSize(availableSpace)}。',
+          errorMessage: _buildNoSpaceLeftWithSizeMessage(totalSize, availableSpace),
         );
       }
 
@@ -148,7 +153,7 @@ class ImportEngine {
         importPhase: ImportPhase.Importing,
         processedCount: 0,
         totalCount: importTargets.length,
-        phase: '取り込み中...',
+        phase: _phaseImporting(),
       );
       _notifyProgress(progress);
       var remainingBytes = totalSize;
@@ -173,7 +178,7 @@ class ImportEngine {
             _log.error('Failed to read disk space during import.', tag: 'ImportEngine');
             stopwatch.stop();
             return ImportResult.error(
-              errorMessage: '保存先の空き容量を取得できないため取り込みを中断しました。',
+              errorMessage: _buildDiskSpaceReadFailedMessage(),
               successCount: successCount,
               skippedCount: skippedCount,
               warnings: warnings,
@@ -188,8 +193,7 @@ class ImportEngine {
             );
             stopwatch.stop();
             return ImportResult.error(
-              errorMessage:
-                  '保存先の空き容量が不足しているため取り込みを中断しました。必要: ${formatFileSize(remainingBytes)}、空き: ${formatFileSize(currentAvailableSpace)}。',
+              errorMessage: _buildNoSpaceLeftWithSizeMessage(remainingBytes, currentAvailableSpace),
               successCount: successCount,
               skippedCount: skippedCount,
               warnings: warnings,
@@ -203,6 +207,7 @@ class ImportEngine {
         progress = progress.startFile(
           mediaFile,
           destinationPath: planItem.destinationPath,
+          phase: _phaseCopying(),
         );
         _notifyProgress(progress);
 
@@ -227,7 +232,8 @@ class ImportEngine {
             if (mediaFile.xxHash != null) {
               if (_lastDestinationPath == null || _lastDestinationPath!.isEmpty) {
                 throw ImportFatalException(
-                  'コピー先パスを確定できないため取り込みを中断しました。',
+                  'Import aborted: Failed to resolve destination path.',
+                  errorType: ImportFatalErrorType.DestinationPathFailed,
                 );
               }
               FileLightweightSignature? signature;
@@ -261,8 +267,9 @@ class ImportEngine {
                   stackTrace: stackTrace,
                 );
                 throw ImportFatalException(
-                  'メタデータの更新に失敗したため取り込みを中断しました。',
+                  'Import aborted: Failed to update metadata.',
                   debugMessage: ex.toString(),
+                  errorType: ImportFatalErrorType.MetadataUpdateFailed,
                 );
               }
               importedFiles.add(record);
@@ -312,7 +319,7 @@ class ImportEngine {
       StreamingCopyWithHash.resetPendingBytes();
 
       _log.error('Import failed.', tag: 'ImportEngine', error: ex, stackTrace: stackTrace);
-      final errorMessage = resolveFatalErrorMessage(ex);
+      final errorMessage = resolveFatalErrorMessage(ex, _l10n);
       return ImportResult.error(
         errorMessage: errorMessage,
         successCount: successCount,
@@ -345,7 +352,10 @@ class ImportEngine {
         importPhase: ImportPhase.ValidatingSDCard,
         processedCount: 0,
         totalCount: 0,
-        phase: 'SD カード構造を検証中...',
+        phase: _resolveLocalizedText(
+          (l10n) => l10n.enum_ImportPhase_ValidatingSDCard_statusText,
+          'Validating SD card structure...',
+        ),
       ),
     );
 
@@ -354,6 +364,7 @@ class ImportEngine {
       _log.error('SD card validation failed: ${validation.errorMessage}', tag: 'ImportEngine');
       throw ImportFatalException(
         'Sony SD card structure validation failed: ${validation.errorMessage}',
+        errorType: ImportFatalErrorType.SDCardValidationFailed,
       );
     }
 
@@ -376,7 +387,10 @@ class ImportEngine {
         importPhase: ImportPhase.CheckingWritePermission,
         processedCount: 0,
         totalCount: 0,
-        phase: '書き込み可能性を確認中...',
+        phase: _resolveLocalizedText(
+          (l10n) => l10n.enum_ImportPhase_CheckingWritePermission_statusText,
+          'Checking write permission...',
+        ),
       ),
     );
     final isWritable = await _metadataManager.isWritable();
@@ -384,6 +398,7 @@ class ImportEngine {
       _log.error('SD card is not writable.', tag: 'ImportEngine');
       throw ImportFatalException(
         'SD card is not writable. Cannot save import metadata.',
+        errorType: ImportFatalErrorType.SDCardNotWritable,
       );
     }
 
@@ -405,7 +420,7 @@ class ImportEngine {
       importPhase: ImportPhase.ScanningMediaFiles,
       processedCount: 0,
       totalCount: 0,
-      phase: 'メディアファイルをスキャン中...',
+      phase: _phaseScanningMediaFiles(),
     );
     _notifyProgress(scanProgress);
 
@@ -418,7 +433,7 @@ class ImportEngine {
             importPhase: ImportPhase.ScanningMediaFiles,
             processedCount: processedCount,
             totalCount: 0,
-            phase: 'メディアファイルをスキャン中...',
+            phase: _phaseScanningMediaFiles(),
             scanCurrentPath: currentPath,
           );
           _notifyProgress(scanProgress);
@@ -455,14 +470,17 @@ class ImportEngine {
         importPhase: ImportPhase.DeterminingTargets,
         processedCount: 0,
         totalCount: mediaFiles.length,
-        phase: '取り込み対象を判定中...',
+        phase: _resolveLocalizedText(
+          (l10n) => l10n.enum_ImportPhase_DeterminingTargets_statusText,
+          'Determining import targets...',
+        ),
       );
       _notifyProgress(scanProgress);
     }
     final plan = await _buildImportTargets(
       mediaFiles,
       warnings,
-      onProgress: (processedCount, totalCount, currentPath, phase, importPhase) {
+      onProgress: (processedCount, totalCount, currentPath, importPhase, phase) {
         scanProgress = ImportProgress.preparingTargets(
           importPhase: importPhase,
           processedCount: processedCount,
@@ -500,6 +518,88 @@ class ImportEngine {
     }
   }
 
+  /// ローカライズされたテキストを取得
+  ///
+  /// l10n が利用できない場合は [fallback] を返す。
+  String _resolveLocalizedText(String Function(AppLocalizations l10n) resolver, String fallback) {
+    final l10n = _l10n;
+    return l10n != null ? resolver(l10n) : fallback;
+  }
+
+  /// 空き容量取得失敗のメッセージを構築
+  String _buildDiskSpaceReadFailedMessage() {
+    return _resolveLocalizedText(
+      (l10n) => l10n.error_diskSpaceReadFailed,
+      'Import aborted: Failed to read available disk space.',
+    );
+  }
+
+  /// 空き容量不足のメッセージを構築
+  String _buildNoSpaceLeftWithSizeMessage(int requiredBytes, int availableBytes) {
+    final requiredText = formatFileSize(requiredBytes);
+    final availableText = formatFileSize(availableBytes);
+    return _resolveLocalizedText(
+      (l10n) => l10n.error_noSpaceLeftWithSize(requiredText, availableText),
+      'Import aborted: Not enough disk space. Required: $requiredText, Available: $availableText.',
+    );
+  }
+
+  /// 進捗詳細: 保存先の容量確認
+  String _phaseCheckingDiskSpace() {
+    return _resolveLocalizedText(
+      (l10n) => l10n.progress_phase_checkingDiskSpace,
+      'Checking destination disk space...',
+    );
+  }
+
+  /// 進捗詳細: 取り込み中
+  String _phaseImporting() {
+    return _resolveLocalizedText(
+      (l10n) => l10n.progress_phase_importing,
+      'Importing...',
+    );
+  }
+
+  /// 進捗詳細: メディアファイルのスキャン
+  String _phaseScanningMediaFiles() {
+    return _resolveLocalizedText(
+      (l10n) => l10n.progress_phase_scanningMediaFiles,
+      'Scanning media files...',
+    );
+  }
+
+  /// 進捗詳細: 保存先フォルダの確認
+  String _phaseCheckingDestinationFolder() {
+    return _resolveLocalizedText(
+      (l10n) => l10n.progress_phase_checkingDestinationFolder,
+      'Checking destination folders...',
+    );
+  }
+
+  /// 進捗詳細: 保存先の重複確認
+  String _phaseCheckingDestinationDuplicate() {
+    return _resolveLocalizedText(
+      (l10n) => l10n.progress_phase_checkingDestinationDuplicate,
+      'Checking for existing files...',
+    );
+  }
+
+  /// 進捗詳細: EXIF の解析
+  String _phaseParsingExif() {
+    return _resolveLocalizedText(
+      (l10n) => l10n.progress_phase_parsingExif,
+      ' Parsing EXIF...',
+    );
+  }
+
+  /// 進捗詳細: コピー中
+  String _phaseCopying() {
+    return _resolveLocalizedText(
+      (l10n) => l10n.enum_ImportPhase_Importing_statusText,
+      'Copying...',
+    );
+  }
+
   /// アプリバージョンを取得する
   ///
   /// 取得に失敗した場合は 'unknown' を返す。
@@ -525,7 +625,13 @@ class ImportEngine {
   Future<({List<ImportPlanItem> items, int totalSize, int skippedCount})> _buildImportTargets(
     List<MediaFile> mediaFiles,
     List<ImportWarning> warnings, {
-    void Function(int processedCount, int totalCount, String? currentPath, String phase, ImportPhase importPhase)?
+    void Function(
+      int processedCount,
+      int totalCount,
+      String? currentPath,
+      ImportPhase importPhase,
+      String? phase,
+    )?
     onProgress,
   }) async {
     final items = <ImportPlanItem>[];
@@ -583,8 +689,11 @@ class ImportEngine {
           processedCount,
           totalFiles,
           file.relativePath,
-          '取り込み対象を判定中...',
           ImportPhase.DeterminingTargets,
+          _resolveLocalizedText(
+            (l10n) => l10n.enum_ImportPhase_DeterminingTargets_statusText,
+            'Determining import targets...',
+          ),
         );
       }
       if (shouldReportLog) {
@@ -695,9 +804,8 @@ class ImportEngine {
           resolvedCount,
           totalCandidates,
           candidate.file.relativePath,
-          // UI 表示上、英字と日本語の間に半角スペースを入れるため先頭スペースを維持する
-          ' EXIF を解析中...',
           ImportPhase.ParsingExif,
+          _phaseParsingExif(),
         );
       }
       if (shouldReportLog) {
@@ -731,8 +839,8 @@ class ImportEngine {
         0,
         destinationFoldersForCandidates.length,
         null,
-        '保存先フォルダを確認中...',
         ImportPhase.CheckingDestination,
+        _phaseCheckingDestinationFolder(),
       );
     }
     await destinationFolderIndex.prewarm(
@@ -745,8 +853,8 @@ class ImportEngine {
             processedCount,
             totalCount,
             folderPath,
-            '保存先フォルダを確認中...',
             ImportPhase.CheckingDestination,
+            _phaseCheckingDestinationFolder(),
           );
         }
         if (shouldReportLog) {
@@ -775,8 +883,8 @@ class ImportEngine {
           resolvedCandidateIndex,
           totalResolvedCandidates,
           candidate.file.relativePath,
-          '保存先の重複を確認中...',
           ImportPhase.CheckingDestination,
+          _phaseCheckingDestinationDuplicate(),
         );
       }
       if (shouldReportLog) {
@@ -1205,8 +1313,10 @@ class ImportEngine {
         error: ex,
       );
       throw ImportFatalException(
-        'ファイルの読み書きに失敗したため取り込みを中断しました。ファイル: ${file.fileName}。',
+        'Import aborted: Failed to read/write file: ${file.fileName}.',
         debugMessage: ex.toString(),
+        errorType: ImportFatalErrorType.FileIOFailed,
+        fileName: file.fileName,
       );
     } on UnsupportedError {
       rethrow;
@@ -1375,8 +1485,10 @@ class ImportEngine {
       // 空き容量不足の場合は専用の例外に変換
       if (_isNoSpaceError(ex)) {
         throw ImportFatalException(
-          '保存先の空き容量が不足しているため取り込みを中断しました。ファイル: ${file.fileName}。',
+          'Import aborted: Not enough disk space for file: ${file.fileName}.',
           debugMessage: ex.toString(),
+          errorType: ImportFatalErrorType.NoSpaceLeft,
+          fileName: file.fileName,
         );
       }
       rethrow;
@@ -1412,20 +1524,24 @@ class ImportEngine {
   }
 
   /// 中断理由をユーザー向けメッセージに変換する
-  String resolveFatalErrorMessage(Object ex) {
+  ///
+  /// [l10n] でローカライズされたメッセージを返す。
+  /// [l10n] が null の場合はフォールバックの英語メッセージを返す。
+  String resolveFatalErrorMessage(Object ex, [AppLocalizations? l10n]) {
     if (ex is ImportFatalException) {
-      return ex.userMessage;
+      return l10n != null ? ex.getLocalizedMessage(l10n) : ex.userMessage;
     }
     if (ex is ImportCancelledException) {
-      return '取り込みがキャンセルされました。';
+      return l10n?.error_importCancelled ?? 'Import was cancelled.';
     }
     if (ex is UnsupportedError) {
-      return 'ファイル日時の取得または復元に必要なネイティブ API が利用できないため取り込みを中断しました。';
+      return l10n?.error_nativeApiUnavailable ??
+          'Import aborted: Native API required for file date handling is unavailable.';
     }
     if (ex is FileSystemException) {
-      return 'ファイルの読み書きに失敗したため取り込みを中断しました。';
+      return l10n?.error_fileIOFailed ?? 'Import aborted: Failed to read/write file.';
     }
-    return '取り込み中にエラーが発生したため中断しました。';
+    return l10n?.error_genericImportFailed ?? 'Import aborted due to an error.';
   }
 }
 
@@ -1576,14 +1692,84 @@ class _DestinationFolderSnapshot {
 }
 
 /// 取り込み処理を中断するための致命的例外
+/// 取り込み中断のエラー種別
+enum ImportFatalErrorType {
+  /// メタデータ更新失敗
+  MetadataUpdateFailed,
+
+  /// ネイティブ API 利用不可
+  NativeApiUnavailable,
+
+  /// ファイル I/O 失敗
+  FileIOFailed,
+
+  /// 空き容量不足
+  NoSpaceLeft,
+
+  /// 空き容量取得失敗
+  DiskSpaceReadFailed,
+
+  /// コピー先パス確定失敗
+  DestinationPathFailed,
+
+  /// SD カード検証失敗
+  SDCardValidationFailed,
+
+  /// SD カード書き込み不可
+  SDCardNotWritable,
+
+  /// その他のエラー
+  Generic,
+}
+
 class ImportFatalException implements Exception {
-  /// ユーザー向けの中断理由
+  /// ユーザー向けの中断理由（フォールバック用）
   final String userMessage;
 
   /// デバッグ用の詳細メッセージ
   final String? debugMessage;
 
-  ImportFatalException(this.userMessage, {this.debugMessage});
+  /// エラー種別
+  final ImportFatalErrorType errorType;
+
+  /// ファイル名（ファイル関連エラー時）
+  final String? fileName;
+
+  ImportFatalException(
+    this.userMessage, {
+    this.debugMessage,
+    this.errorType = ImportFatalErrorType.Generic,
+    this.fileName,
+  });
+
+  /// ローカライズされたメッセージを取得
+  String getLocalizedMessage(AppLocalizations l10n) {
+    switch (errorType) {
+      case ImportFatalErrorType.MetadataUpdateFailed:
+        return l10n.error_metadataUpdateFailed;
+      case ImportFatalErrorType.FileIOFailed:
+        if (fileName != null) {
+          return l10n.error_fileIOFailedWithName(fileName!);
+        }
+        return l10n.error_fileIOFailed;
+      case ImportFatalErrorType.NoSpaceLeft:
+        if (fileName != null) {
+          return l10n.error_noSpaceLeftWithName(fileName!);
+        }
+        return l10n.error_noSpaceLeft;
+      case ImportFatalErrorType.NativeApiUnavailable:
+        return l10n.error_nativeApiUnavailable;
+      case ImportFatalErrorType.DiskSpaceReadFailed:
+        return l10n.error_diskSpaceReadFailed;
+      case ImportFatalErrorType.DestinationPathFailed:
+        return l10n.error_destinationPathFailed;
+      case ImportFatalErrorType.SDCardValidationFailed:
+      case ImportFatalErrorType.SDCardNotWritable:
+        return userMessage;
+      case ImportFatalErrorType.Generic:
+        return l10n.error_genericImportFailed;
+    }
+  }
 
   @override
   String toString() {

@@ -4,6 +4,7 @@
 library;
 
 import 'dart:io' show Platform;
+import 'dart:ui' show Locale;
 
 import 'package:json_annotation/json_annotation.dart';
 
@@ -35,18 +36,6 @@ enum SubfolderPattern {
 
 /// SubfolderPattern の拡張メソッド
 extension SubfolderPatternExtension on SubfolderPattern {
-  /// 日本語での表示名
-  String get displayName {
-    switch (this) {
-      case SubfolderPattern.DateOnly:
-        return '日付のみ';
-      case SubfolderPattern.YearAndDate:
-        return '年/日付';
-      case SubfolderPattern.YearMonthAndDate:
-        return '年/月/日付';
-    }
-  }
-
   /// パターンの例を取得
   ///
   /// [dateFormat] と [separator] を使用して実際の例を生成する
@@ -76,16 +65,6 @@ enum DateFormatStyle {
 
 /// DateFormatStyle の拡張メソッド
 extension DateFormatStyleExtension on DateFormatStyle {
-  /// 日本語での表示名
-  String get displayName {
-    switch (this) {
-      case DateFormatStyle.YYYYMMDD:
-        return 'YYYY_MM_DD（4桁年）';
-      case DateFormatStyle.YYMMDD:
-        return 'YY_MM_DD（2桁年）';
-    }
-  }
-
   /// 日付をフォーマットする
   ///
   /// [year], [month], [day] を指定された [separator] で結合する
@@ -126,15 +105,42 @@ extension DateSeparatorExtension on DateSeparator {
   }
 
   /// 日本語での表示名
-  String get displayName {
+}
+
+/// アプリの表示言語
+enum AppLanguage {
+  /// 日本語
+  Japanese,
+
+  /// 英語
+  English,
+}
+
+/// AppLanguage の拡張メソッド
+extension AppLanguageExtension on AppLanguage {
+  /// ロケールコードを取得
+  String get localeCode {
     switch (this) {
-      case DateSeparator.None:
-        return 'なし（20251224）';
-      case DateSeparator.Underscore:
-        return 'アンダースコア（2025_12_24）';
-      case DateSeparator.Hyphen:
-        return 'ハイフン（2025-12-24）';
+      case AppLanguage.Japanese:
+        return 'ja';
+      case AppLanguage.English:
+        return 'en';
     }
+  }
+
+  /// Locale オブジェクトを取得
+  Locale get locale => Locale(localeCode);
+
+  /// OS ロケールからデフォルト言語を決定
+  ///
+  /// プラットフォームのロケール設定が日本語で始まる場合は日本語、
+  /// それ以外の場合は英語をデフォルトとする。
+  static AppLanguage fromPlatformLocale() {
+    final platformLocale = Platform.localeName;
+    if (platformLocale.startsWith('ja')) {
+      return AppLanguage.Japanese;
+    }
+    return AppLanguage.English;
   }
 }
 
@@ -191,6 +197,11 @@ class ImportSettings {
   /// 編集ソフトでのプレビュー用途に使用される。
   final bool isImportProxyVideos;
 
+  /// アプリの表示言語
+  ///
+  /// デフォルトは OS のロケール設定に基づいて決定される。
+  final AppLanguage language;
+
   ImportSettings({
     required this.destinationFolder,
     this.subfolderPattern = SubfolderPattern.DateOnly,
@@ -202,13 +213,18 @@ class ImportSettings {
     this.cameraTimezone = 'Asia/Tokyo',
     this.isImportVideoXML = true,
     this.isImportProxyVideos = true,
+    this.language = AppLanguage.Japanese,
   });
 
   /// デフォルト設定を取得
   ///
-  /// 保存先フォルダは空文字列（初回起動時に設定を促す）
+  /// 保存先フォルダは空文字列（初回起動時に設定を促す）。
+  /// 言語は OS ロケールに基づいて決定される。
   factory ImportSettings.defaults() {
-    return ImportSettings(destinationFolder: '');
+    return ImportSettings(
+      destinationFolder: '',
+      language: AppLanguageExtension.fromPlatformLocale(),
+    );
   }
 
   /// JSON からデシリアライズ
@@ -229,6 +245,7 @@ class ImportSettings {
     String? cameraTimezone,
     bool? isImportVideoXML,
     bool? isImportProxyVideos,
+    AppLanguage? language,
   }) {
     return ImportSettings(
       destinationFolder: destinationFolder ?? this.destinationFolder,
@@ -241,6 +258,7 @@ class ImportSettings {
       cameraTimezone: cameraTimezone ?? this.cameraTimezone,
       isImportVideoXML: isImportVideoXML ?? this.isImportVideoXML,
       isImportProxyVideos: isImportProxyVideos ?? this.isImportProxyVideos,
+      language: language ?? this.language,
     );
   }
 

@@ -5,6 +5,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/generated/app_localizations.dart';
 import '../../services/device_detector.dart';
 
 /// デバイスカードウィジェット
@@ -30,6 +31,7 @@ class DeviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final isEnabled = isSelectable && device.isSonyAlphaCard;
 
     return Card(
@@ -45,7 +47,7 @@ class DeviceCard extends StatelessWidget {
               const SizedBox(width: 16),
 
               // デバイス情報
-              Expanded(child: _buildInfo(context, theme, isEnabled)),
+              Expanded(child: _buildInfo(context, theme, l10n, isEnabled)),
 
               // ステータスアイコン
               _buildStatusIcon(context, isEnabled),
@@ -93,8 +95,9 @@ class DeviceCard extends StatelessWidget {
   }
 
   /// デバイス情報を構築
-  Widget _buildInfo(BuildContext context, ThemeData theme, bool isEnabled) {
+  Widget _buildInfo(BuildContext context, ThemeData theme, AppLocalizations l10n, bool isEnabled) {
     final textColor = isEnabled ? Colors.white : Colors.white54;
+    final sizeDetail = _buildSizeDetail(l10n);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,10 +124,10 @@ class DeviceCard extends StatelessWidget {
         ),
 
         // 容量情報（取得できた場合のみ）
-        if (device.formattedSizeDetail != null) ...[
+        if (sizeDetail != null) ...[
           const SizedBox(height: 4),
           Text(
-            device.formattedSizeDetail!,
+            sizeDetail,
             style: theme.textTheme.bodySmall?.copyWith(color: textColor.withValues(alpha: 0.7)),
           ),
         ],
@@ -133,7 +136,7 @@ class DeviceCard extends StatelessWidget {
         if (!device.isSonyAlphaCard) ...[
           const SizedBox(height: 8),
           Text(
-            'このデバイスは Sony α カメラの SD カード構造として認識できませんでした。',
+            l10n.deviceCard_notRecognized,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.error.withValues(alpha: 0.8),
             ),
@@ -141,6 +144,23 @@ class DeviceCard extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  /// 容量情報の表示テキストを取得
+  ///
+  /// 使用済みと空き容量が取得できる場合は詳細表示を行う。
+  /// 取得できない場合は総容量のみを返す。
+  String? _buildSizeDetail(AppLocalizations l10n) {
+    final total = device.formattedSize;
+    if (total == null) {
+      return null;
+    }
+    final used = device.formattedUsedSize;
+    final free = device.formattedFreeSize;
+    if (used != null && free != null) {
+      return l10n.deviceCard_storageDetail(total, used, free);
+    }
+    return total;
   }
 
   /// ステータスアイコンを構築
@@ -166,6 +186,7 @@ class EmptyDeviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Card(
       child: Container(
@@ -180,19 +201,19 @@ class EmptyDeviceCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'デバイスが検出されていません',
+              l10n.deviceCard_noDevices,
               style: theme.textTheme.titleMedium?.copyWith(color: Colors.white70),
             ),
             const SizedBox(height: 8),
             Text(
-              'SD カードまたはカメラを接続してください',
+              l10n.deviceCard_connectHint,
               style: theme.textTheme.bodySmall?.copyWith(color: Colors.white54),
             ),
             const SizedBox(height: 24),
             OutlinedButton.icon(
               onPressed: onSelectFolder,
               icon: const Icon(Icons.folder_open),
-              label: const Text('フォルダを手動選択'),
+              label: Text(l10n.deviceCard_manualSelect),
             ),
           ],
         ),

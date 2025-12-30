@@ -7,6 +7,7 @@ library;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/generated/app_localizations.dart';
 import '../models/settings.dart';
 import '../services/device_detector.dart';
 import '../services/logging_service.dart';
@@ -91,7 +92,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// アップデートをチェック
   Future<void> _checkForUpdates() async {
-    final result = await UpdateCheckService.instance.checkForUpdates();
+    final l10n = AppLocalizations.of(context);
+    final result = await UpdateCheckService.instance.checkForUpdates(l10n: l10n);
     if (mounted && result.isUpdateAvailable) {
       setState(() {
         _updateCheckResult = result;
@@ -102,10 +104,11 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 手動でフォルダを選択
   Future<void> _selectFolder() async {
     _log.info('Opening folder picker dialog.', tag: 'HomeScreen');
+    final l10n = AppLocalizations.of(context);
 
     try {
       final result = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'インポート元フォルダを選択',
+        dialogTitle: l10n.home_filePicker_title,
       );
 
       if (result != null) {
@@ -118,8 +121,8 @@ class _HomeScreenState extends State<HomeScreen> {
         } else if (mounted) {
           _log.warning('Selected folder is not a Sony SD card structure.', tag: 'HomeScreen');
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('選択されたフォルダは Sony α カメラの SD カード構造として認識できませんでした。'),
+            SnackBar(
+              content: Text(l10n.home_invalidSdCard),
             ),
           );
         }
@@ -148,22 +151,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// 取り込みを開始
   Future<void> _startImport(DetectedDevice device) async {
+    final l10n = AppLocalizations.of(context);
+
     // 保存先フォルダが設定されているか確認
     if (_settings == null || !_settings!.hasDestinationFolder) {
       final shouldOpenSettings = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('保存先フォルダが未設定です'),
-          content: const Text('取り込みを開始する前に、保存先フォルダを設定してください。'),
+          title: Text(l10n.destinationNotSet_title),
+          content: Text(l10n.destinationNotSet_message),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('キャンセル'),
+              child: Text(l10n.button_cancel),
             ),
             ElevatedButton.icon(
               onPressed: () => Navigator.pop(context, true),
               icon: const Icon(Icons.settings),
-              label: const Text('設定を開く'),
+              label: Text(l10n.button_openSettings),
             ),
           ],
         ),
@@ -249,6 +254,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// ヘッダーを構築
   Widget _buildHeader(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Row(
@@ -290,14 +297,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.refresh),
-            tooltip: '更新',
+            tooltip: l10n.tooltip_refresh,
           ),
 
           // 設定ボタン
           IconButton(
             onPressed: _settings != null ? _openSettings : null,
             icon: const Icon(Icons.settings),
-            tooltip: '設定',
+            tooltip: l10n.tooltip_settings,
           ),
         ],
       ),
@@ -306,13 +313,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// ローディングインジケーターを構築
   Widget _buildLoadingIndicator() {
-    return const Center(
+    final l10n = AppLocalizations.of(context);
+
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           CircularProgressIndicator(),
           SizedBox(height: 16),
-          Text('デバイスをスキャン中...'),
+          Text(l10n.home_scanningDevices),
         ],
       ),
     );
@@ -320,6 +329,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// コンテンツを構築
   Widget _buildContent(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       child: Column(
@@ -329,11 +340,11 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildSection(
             context,
             icon: Icons.camera_alt,
-            title: 'カメラから取り込み',
-            description: 'USB ケーブルで接続されたカメラから直接写真・動画を取り込みます。',
+            title: l10n.home_sectionCamera_title,
+            description: l10n.home_sectionCamera_description,
             devices: _cameraDevices,
-            emptyMessage: 'カメラが接続されていません',
-            emptyHint: 'USB ケーブルでカメラを接続してください',
+            emptyMessage: l10n.home_sectionCamera_empty,
+            emptyHint: l10n.home_sectionCamera_emptyHint,
           ),
 
           const SizedBox(height: 24),
@@ -342,11 +353,11 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildSection(
             context,
             icon: Icons.sd_card,
-            title: 'SD カードから取り込み',
-            description: 'SD カードリーダーを使用して、SD カードから写真・動画を取り込みます。',
+            title: l10n.home_sectionSDCard_title,
+            description: l10n.home_sectionSDCard_description,
             devices: _sdCardDevices,
-            emptyMessage: 'SD カードが挿入されていません',
-            emptyHint: 'SD カードをカードリーダーに挿入してください',
+            emptyMessage: l10n.home_sectionSDCard_empty,
+            emptyHint: l10n.home_sectionSDCard_emptyHint,
           ),
 
           const SizedBox(height: 24),
@@ -423,6 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// フォルダセクションを構築
   Widget _buildFolderSection(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,7 +445,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Icon(Icons.folder, size: 24, color: theme.colorScheme.primary),
             const SizedBox(width: 12),
             Text(
-              'フォルダから取り込み',
+              l10n.home_sectionFolder_title,
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -448,7 +460,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Padding(
           padding: const EdgeInsets.only(left: 36),
           child: Text(
-            'PC 上のフォルダを直接選択して取り込みます。過去のバックアップからの取り込みに便利です。',
+            l10n.home_sectionFolder_description,
             style: theme.textTheme.bodySmall?.copyWith(
               color: Colors.white60,
             ),
@@ -497,7 +509,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'フォルダを選択 ...',
+                          l10n.home_sectionFolder_selectButton,
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: Colors.white70,
                             fontWeight: FontWeight.w600,
@@ -505,7 +517,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Sony α カメラの SD カードのバックアップフォルダを選択してください',
+                          l10n.home_sectionFolder_selectHint,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: Colors.white38,
                           ),

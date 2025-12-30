@@ -74,26 +74,6 @@ extension MediaTypeExtension on MediaType {
   bool get isVideo {
     return this == MediaType.Video || this == MediaType.ProxyVideo;
   }
-
-  /// 日本語での表示名
-  String get displayName {
-    switch (this) {
-      case MediaType.JPEGPhoto:
-        return 'JPEG 写真';
-      case MediaType.RAWPhoto:
-        return 'RAW 写真';
-      case MediaType.HEIFPhoto:
-        return 'HEIF 写真';
-      case MediaType.Video:
-        return '動画';
-      case MediaType.ProxyVideo:
-        return 'プロキシー動画';
-      case MediaType.VideoMeta:
-        return '動画メタデータ';
-      case MediaType.Unknown:
-        return '未知のファイル';
-    }
-  }
 }
 
 /// メディアファイルの情報を保持するクラス

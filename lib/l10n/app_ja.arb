@@ -1,0 +1,328 @@
+{
+  "@@locale": "ja",
+
+  "tooltip_refresh": "更新",
+  "tooltip_settings": "設定",
+  "tooltip_selectFolder": "フォルダを選択",
+  "tooltip_close": "閉じる",
+
+  "home_scanningDevices": "デバイスをスキャン中...",
+  "home_sectionCamera_title": "カメラから取り込み",
+  "home_sectionCamera_description": "USB ケーブルで接続されたカメラから直接写真・動画を取り込みます。",
+  "home_sectionCamera_empty": "カメラが接続されていません",
+  "home_sectionCamera_emptyHint": "USB ケーブルでカメラを接続してください",
+  "home_sectionSDCard_title": "SD カードから取り込み",
+  "home_sectionSDCard_description": "SD カードリーダーを使用して、SD カードから写真・動画を取り込みます。",
+  "home_sectionSDCard_empty": "SD カードが挿入されていません",
+  "home_sectionSDCard_emptyHint": "SD カードをカードリーダーに挿入してください",
+  "home_sectionFolder_title": "フォルダから取り込み",
+  "home_sectionFolder_description": "PC 上のフォルダを直接選択して取り込みます。過去のバックアップからの取り込みに便利です。",
+  "home_sectionFolder_selectButton": "フォルダを選択 ...",
+  "home_sectionFolder_selectHint": "Sony α カメラの SD カードのバックアップフォルダを選択してください",
+  "home_filePicker_title": "インポート元フォルダを選択",
+  "home_invalidSdCard": "選択されたフォルダは Sony α カメラの SD カード構造として認識できませんでした。",
+
+  "deviceCard_notRecognized": "このデバイスは Sony α カメラの SD カード構造として認識できませんでした。",
+  "deviceCard_noDevices": "デバイスが検出されていません",
+  "deviceCard_connectHint": "SD カードまたはカメラを接続してください",
+  "deviceCard_manualSelect": "フォルダを手動選択",
+  "deviceCard_storageDetail": "{total}（使用: {used} / 空き: {free}）",
+  "@deviceCard_storageDetail": {
+    "placeholders": {
+      "total": { "type": "String" },
+      "used": { "type": "String" },
+      "free": { "type": "String" }
+    }
+  },
+
+  "settings_title": "設定",
+  "settings_tab_basic": "基本設定",
+  "settings_tab_options": "取り込みオプション",
+
+  "settings_language_title": "言語",
+  "settings_language_description": "アプリの表示言語を選択します。",
+  "settings_language_label": "言語",
+  "settings_language_option_japanese": "日本語",
+  "settings_language_option_english": "英語",
+
+  "settings_destinationFolder_title": "保存先フォルダ",
+  "settings_destinationFolder_description": "取り込んだ写真・動画を保存するフォルダを指定します。",
+  "settings_destinationFolder_hint": "フォルダを選択してください",
+  "settings_destinationFolder_picker": "保存先フォルダを選択",
+  "settings_destinationFolder_notSet": "(保存先未設定)",
+
+  "settings_subfolder_title": "サブフォルダ設定",
+  "settings_subfolder_description": "撮影日ごとにサブフォルダを作成するパターンを選択します。",
+  "settings_subfolder_label": "パターン",
+
+  "settings_dateFormat_title": "日付フォーマット",
+  "settings_dateFormat_description": "サブフォルダ名に使用する日付の表記形式を指定します。",
+  "settings_dateFormat_yearLabel": "年の形式",
+  "settings_dateFormat_separatorLabel": "区切り文字",
+
+  "settings_preview_title": "プレビュー",
+
+  "settings_importPreview_title": "取り込み前プレビュー",
+  "settings_importPreview_description": "スキャン完了後に取り込み対象の一覧を表示し、続行するか確認します。",
+  "settings_importPreview_switch": "取り込み前にプレビューを表示",
+
+  "settings_dateRestore_title": "ファイル日時の復元",
+  "settings_dateRestore_description": "コピー後のファイルの作成日時・更新日時を、EXIF に記録された撮影日時に合わせます。",
+  "settings_dateRestore_switch": "EXIF から日時を復元",
+
+  "settings_timezone_title": "カメラタイムゾーン",
+  "settings_timezone_description": "ファイル日時の復元時に利用する、カメラに設定されているタイムゾーンを指定します。\nEXIF にタイムゾーン情報が含まれている場合は、その値を優先します。\nEXIF にタイムゾーン情報がない場合のみ、この設定がフォールバックとして利用されます。\n日本国内で使用している場合は「東京」を選択してください。",
+  "settings_timezone_label": "タイムゾーン",
+
+  "settings_videoMeta_title": "動画メタデータ",
+  "settings_videoMeta_description": "動画ファイル (.MP4) に付随する XML メタデータ (例: C0001M01.XML) も取り込みます。\n動画単体で利活用する分には不要ですが、ソニー純正ソフトとの互換性のため、取り込むことを推奨します。",
+  "settings_videoMeta_switch": "動画メタデータ (XML) を取り込む",
+
+  "settings_proxyVideo_title": "プロキシー動画",
+  "settings_proxyVideo_description": "オリジナルの動画ファイルと同時に生成された、低解像度のプロキシー動画\n(PRIVATE/M4ROOT/SUB/ フォルダ内) も取り込みます。",
+  "settings_proxyVideo_switch": "プロキシー動画を取り込む",
+
+  "button_cancel": "キャンセル",
+  "button_save": "保存",
+  "button_close": "閉じる",
+  "button_continue": "続行",
+  "button_openSettings": "設定を開く",
+  "button_openDestination": "保存先を開く",
+
+  "destinationNotSet_title": "保存先フォルダが未設定です",
+  "destinationNotSet_message": "取り込みを開始する前に、保存先フォルダを設定してください。",
+
+  "import_dialog_preview": "取り込み前プレビュー",
+  "import_dialog_completed": "取り込み完了",
+  "import_dialog_cancelled": "取り込み中断",
+
+  "import_cancelConfirm_title": "取り込みをキャンセルしますか？",
+  "import_cancelConfirm_preparing": "スキャンを中止してダイアログを閉じます。",
+  "import_cancelConfirm_preview": "取り込みを開始せずにプレビューを閉じます。",
+  "import_cancelConfirm_importing": "現在コピー中のファイルが完了してから停止します。",
+
+  "import_previewTargetCount": "{deviceName} の取り込み対象: {count} 件",
+  "@import_previewTargetCount": {
+    "placeholders": {
+      "deviceName": { "type": "String" },
+      "count": { "type": "int" }
+    }
+  },
+
+  "import_fromDevice": "{deviceName} から{statusText}",
+  "@import_fromDevice": {
+    "placeholders": {
+      "deviceName": { "type": "String" },
+      "statusText": { "type": "String" }
+    }
+  },
+
+  "import_previewSource": "取り込み元: {path}",
+  "@import_previewSource": {
+    "placeholders": {
+      "path": { "type": "String" }
+    }
+  },
+
+  "import_previewDestination": "取り込み先: {path}",
+  "@import_previewDestination": {
+    "placeholders": {
+      "path": { "type": "String" }
+    }
+  },
+
+  "import_result_abortReason": "中断理由",
+  "import_result_warnings": "警告 ({count}件)",
+  "@import_result_warnings": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+
+  "progress_scanningCount": "スキャン中（{count} 件）",
+  "@progress_scanningCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "progress_scanning": "スキャン中...",
+  "progress_fileCount": "{current} / {total} 件",
+  "@progress_fileCount": {
+    "placeholders": {
+      "current": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "progress_phase_scanningMediaFiles": "メディアファイルをスキャン中...",
+  "progress_phase_checkingDiskSpace": "保存先の容量を確認中...",
+  "progress_phase_importing": "取り込み中...",
+  "progress_phase_checkingDestinationFolder": "保存先フォルダを確認中...",
+  "progress_phase_checkingDestinationDuplicate": "保存先の重複を確認中...",
+  "progress_phase_parsingExif": " EXIF を解析中...",
+
+  "result_success": "成功",
+  "result_skipped": "スキップ",
+  "result_warning": "警告",
+  "result_error": "エラー",
+  "result_countUnit": "{count} 件",
+  "@result_countUnit": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+
+  "result_duration": "処理時間: {duration}",
+  "@result_duration": {
+    "placeholders": {
+      "duration": { "type": "String" }
+    }
+  },
+
+  "result_durationHoursMinutes": "{hours}時間{minutes}分",
+  "@result_durationHoursMinutes": {
+    "placeholders": {
+      "hours": { "type": "int" },
+      "minutes": { "type": "int" }
+    }
+  },
+  "result_durationMinutesSeconds": "{minutes}分{seconds}秒",
+  "@result_durationMinutesSeconds": {
+    "placeholders": {
+      "minutes": { "type": "int" },
+      "seconds": { "type": "int" }
+    }
+  },
+  "result_durationSeconds": "{seconds}秒",
+  "@result_durationSeconds": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+
+  "result_status_cancelled": "取り込みがキャンセルされました",
+  "result_status_error": "取り込み中にエラーが発生しました",
+  "result_status_noNewFiles": "新しいファイルはありませんでした",
+  "result_status_completed": "取り込みが完了しました",
+
+  "error_metadataUpdateFailed": "メタデータの更新に失敗したため取り込みを中断しました。",
+  "error_importCancelled": "取り込みがキャンセルされました。",
+  "error_nativeApiUnavailable": "ファイル日時の取得または復元に必要なネイティブ API が利用できないため取り込みを中断しました。",
+  "error_fileIOFailed": "ファイルの読み書きに失敗したため取り込みを中断しました。",
+  "error_fileIOFailedWithName": "ファイルの読み書きに失敗したため取り込みを中断しました。ファイル: {fileName}。",
+  "@error_fileIOFailedWithName": {
+    "placeholders": {
+      "fileName": { "type": "String" }
+    }
+  },
+  "error_genericImportFailed": "取り込み中にエラーが発生したため中断しました。",
+  "error_browserOpenFailed": "ブラウザを開けませんでした。",
+  "error_diskSpaceReadFailed": "保存先の空き容量を取得できないため取り込みを中断しました。",
+  "error_noSpaceLeft": "保存先の空き容量が不足しているため取り込みを中断しました。",
+  "error_noSpaceLeftWithName": "保存先の空き容量が不足しているため取り込みを中断しました。ファイル: {fileName}。",
+  "@error_noSpaceLeftWithName": {
+    "placeholders": {
+      "fileName": { "type": "String" }
+    }
+  },
+  "error_noSpaceLeftWithSize": "保存先の空き容量が不足しているため取り込みを中断しました。必要: {required}、空き: {available}。",
+  "@error_noSpaceLeftWithSize": {
+    "placeholders": {
+      "required": { "type": "String" },
+      "available": { "type": "String" }
+    }
+  },
+  "error_destinationPathFailed": "コピー先パスを確定できないため取り込みを中断しました。",
+
+  "update_error_checkFailed": "アップデートの確認に失敗しました。",
+  "update_error_releaseNotFound": "リリースが見つかりませんでした。",
+  "update_error_apiFailed": "GitHub API エラー ({statusCode})",
+  "@update_error_apiFailed": {
+    "placeholders": {
+      "statusCode": { "type": "int" }
+    }
+  },
+
+  "update_message": "新しいバージョン {version} が利用可能です。",
+  "@update_message": {
+    "placeholders": {
+      "version": { "type": "String" }
+    }
+  },
+  "update_message_prefix": "新しいバージョン ",
+  "update_message_suffix": " が利用可能です。",
+  "update_download": " ダウンロード",
+
+  "enum_SubfolderPattern_DateOnly": "日付のみ",
+  "enum_SubfolderPattern_YearAndDate": "年/日付",
+  "enum_SubfolderPattern_YearMonthAndDate": "年/月/日付",
+
+  "enum_DateFormatStyle_YYYYMMDD": "YYYY_MM_DD（4桁年）",
+  "enum_DateFormatStyle_YYMMDD": "YY_MM_DD（2桁年）",
+
+  "enum_DateSeparator_None": "なし（20251224）",
+  "enum_DateSeparator_Underscore": "アンダースコア（2025_12_24）",
+  "enum_DateSeparator_Hyphen": "ハイフン（2025-12-24）",
+
+  "enum_MediaType_JPEGPhoto": "JPEG 写真",
+  "enum_MediaType_RAWPhoto": "RAW 写真",
+  "enum_MediaType_HEIFPhoto": "HEIF 写真",
+  "enum_MediaType_Video": "動画",
+  "enum_MediaType_ProxyVideo": "プロキシー動画",
+  "enum_MediaType_VideoMeta": "動画メタデータ",
+  "enum_MediaType_Unknown": "未知のファイル",
+
+  "enum_ImportWarningType_DuplicateRenamed": "別名で保存",
+  "enum_ImportWarningType_ExifReadFailed": "EXIF 読み取り失敗",
+  "enum_ImportWarningType_DateRestoreFailed": "日時復元失敗",
+  "enum_ImportWarningType_HashVerificationFailed": "ハッシュ検証失敗",
+  "enum_ImportWarningType_MetadataUpdateSkipped": "メタデータ更新スキップ",
+  "enum_ImportWarningType_UnknownExtensionFound": "未知の拡張子",
+  "enum_ImportWarningType_FileInUseSkipped": "使用中ファイルをスキップ",
+
+  "enum_ImportPhase_Initializing_dialogTitle": "準備中...",
+  "enum_ImportPhase_ValidatingSDCard_dialogTitle": "SD カードを検証中...",
+  "enum_ImportPhase_CheckingWritePermission_dialogTitle": "SD カードを検証中...",
+  "enum_ImportPhase_ScanningMediaFiles_dialogTitle": "メディアをスキャン中...",
+  "enum_ImportPhase_DeterminingTargets_dialogTitle": "取り込み対象を判定中...",
+  "enum_ImportPhase_ParsingExif_dialogTitle": "EXIF を解析中...",
+  "enum_ImportPhase_CheckingDestination_dialogTitle": "保存先を確認中...",
+  "enum_ImportPhase_CheckingDiskSpace_dialogTitle": "容量を確認中...",
+  "enum_ImportPhase_Importing_dialogTitle": "取り込み中...",
+
+  "enum_ImportPhase_Initializing_statusText": "準備中...",
+  "enum_ImportPhase_ValidatingSDCard_statusText": "SD カード構造を検証中...",
+  "enum_ImportPhase_CheckingWritePermission_statusText": "書き込み可能性を確認中...",
+  "enum_ImportPhase_ScanningMediaFiles_statusText": "スキャン中...",
+  "enum_ImportPhase_DeterminingTargets_statusText": "取り込み対象を判定中...",
+  "enum_ImportPhase_ParsingExif_statusText": "EXIF を解析中...",
+  "enum_ImportPhase_CheckingDestination_statusText": "保存先を確認中...",
+  "enum_ImportPhase_CheckingDiskSpace_statusText": "容量を確認中...",
+  "enum_ImportPhase_Importing_statusText": "コピー中...",
+
+  "tz_honolulu": "ホノルル",
+  "tz_anchorage": "アンカレッジ",
+  "tz_losAngeles": "ロサンゼルス",
+  "tz_denver": "デンバー",
+  "tz_chicago": "シカゴ",
+  "tz_newYork": "ニューヨーク",
+  "tz_saoPaulo": "サンパウロ",
+  "tz_azores": "アゾレス",
+  "tz_utc": "UTC",
+  "tz_london": "ロンドン",
+  "tz_paris": "パリ",
+  "tz_berlin": "ベルリン",
+  "tz_athens": "アテネ",
+  "tz_moscow": "モスクワ",
+  "tz_dubai": "ドバイ",
+  "tz_karachi": "カラチ",
+  "tz_kolkata": "コルカタ",
+  "tz_dhaka": "ダッカ",
+  "tz_bangkok": "バンコク",
+  "tz_singapore": "シンガポール",
+  "tz_hongKong": "香港",
+  "tz_shanghai": "上海",
+  "tz_tokyo": "東京",
+  "tz_seoul": "ソウル",
+  "tz_sydney": "シドニー",
+  "tz_auckland": "オークランド"
+}

@@ -1,0 +1,328 @@
+{
+  "@@locale": "en",
+
+  "tooltip_refresh": "Refresh",
+  "tooltip_settings": "Settings",
+  "tooltip_selectFolder": "Select Folder",
+  "tooltip_close": "Close",
+
+  "home_scanningDevices": "Scanning devices...",
+  "home_sectionCamera_title": "Import from Camera",
+  "home_sectionCamera_description": "Import photos and videos directly from a camera connected via USB cable.",
+  "home_sectionCamera_empty": "No camera connected",
+  "home_sectionCamera_emptyHint": "Connect your camera with a USB cable",
+  "home_sectionSDCard_title": "Import from SD Card",
+  "home_sectionSDCard_description": "Import photos and videos from an SD card using a card reader.",
+  "home_sectionSDCard_empty": "No SD card inserted",
+  "home_sectionSDCard_emptyHint": "Insert an SD card into the card reader",
+  "home_sectionFolder_title": "Import from Folder",
+  "home_sectionFolder_description": "Select a folder on your PC to import. Useful for importing from old backups.",
+  "home_sectionFolder_selectButton": "Select Folder...",
+  "home_sectionFolder_selectHint": "Select a backup folder of a Sony α camera SD card",
+  "home_filePicker_title": "Select source folder",
+  "home_invalidSdCard": "The selected folder was not recognized as a Sony α camera SD card structure.",
+
+  "deviceCard_notRecognized": "This device was not recognized as a Sony α camera SD card structure.",
+  "deviceCard_noDevices": "No devices detected",
+  "deviceCard_connectHint": "Connect an SD card or camera",
+  "deviceCard_manualSelect": "Select folder manually",
+  "deviceCard_storageDetail": "{total} (Used: {used} / Free: {free})",
+  "@deviceCard_storageDetail": {
+    "placeholders": {
+      "total": { "type": "String" },
+      "used": { "type": "String" },
+      "free": { "type": "String" }
+    }
+  },
+
+  "settings_title": "Settings",
+  "settings_tab_basic": "Basic",
+  "settings_tab_options": "Import Options",
+
+  "settings_language_title": "Language",
+  "settings_language_description": "Select the display language for the app.",
+  "settings_language_label": "Language",
+  "settings_language_option_japanese": "Japanese",
+  "settings_language_option_english": "English",
+
+  "settings_destinationFolder_title": "Destination Folder",
+  "settings_destinationFolder_description": "Specify the folder where imported photos and videos will be saved.",
+  "settings_destinationFolder_hint": "Select a folder",
+  "settings_destinationFolder_picker": "Select destination folder",
+  "settings_destinationFolder_notSet": "(Not set)",
+
+  "settings_subfolder_title": "Subfolder Settings",
+  "settings_subfolder_description": "Select a pattern for creating subfolders by capture date.",
+  "settings_subfolder_label": "Pattern",
+
+  "settings_dateFormat_title": "Date Format",
+  "settings_dateFormat_description": "Specify the date format used for subfolder names.",
+  "settings_dateFormat_yearLabel": "Year Format",
+  "settings_dateFormat_separatorLabel": "Separator",
+
+  "settings_preview_title": "Preview",
+
+  "settings_importPreview_title": "Import Preview",
+  "settings_importPreview_description": "Show a list of files to import after scanning and confirm before proceeding.",
+  "settings_importPreview_switch": "Show preview before import",
+
+  "settings_dateRestore_title": "Restore File Dates",
+  "settings_dateRestore_description": "Set the creation and modification dates of copied files to match the capture date from EXIF.",
+  "settings_dateRestore_switch": "Restore dates from EXIF",
+
+  "settings_timezone_title": "Camera Timezone",
+  "settings_timezone_description": "Specify the timezone set on your camera, used when restoring file dates.\nIf EXIF contains timezone information, that value takes priority.\nThis setting is only used as a fallback when EXIF lacks timezone info.\nSelect \"Tokyo\" if you use the camera in Japan.",
+  "settings_timezone_label": "Timezone",
+
+  "settings_videoMeta_title": "Video Metadata",
+  "settings_videoMeta_description": "Also import XML metadata files (e.g., C0001M01.XML) associated with video files (.MP4).\nNot required for general video use, but recommended for compatibility with Sony software.",
+  "settings_videoMeta_switch": "Import video metadata (XML)",
+
+  "settings_proxyVideo_title": "Proxy Videos",
+  "settings_proxyVideo_description": "Also import low-resolution proxy videos (in PRIVATE/M4ROOT/SUB/ folder)\ngenerated alongside the original video files.",
+  "settings_proxyVideo_switch": "Import proxy videos",
+
+  "button_cancel": "Cancel",
+  "button_save": "Save",
+  "button_close": "Close",
+  "button_continue": "Continue",
+  "button_openSettings": "Open Settings",
+  "button_openDestination": "Open Destination",
+
+  "destinationNotSet_title": "Destination folder not set",
+  "destinationNotSet_message": "Please set a destination folder before starting the import.",
+
+  "import_dialog_preview": "Import Preview",
+  "import_dialog_completed": "Import Complete",
+  "import_dialog_cancelled": "Import Cancelled",
+
+  "import_cancelConfirm_title": "Cancel import?",
+  "import_cancelConfirm_preparing": "Stop scanning and close the dialog.",
+  "import_cancelConfirm_preview": "Close preview without starting import.",
+  "import_cancelConfirm_importing": "Stop after the current file finishes copying.",
+
+  "import_previewTargetCount": "{deviceName} import targets: {count} files",
+  "@import_previewTargetCount": {
+    "placeholders": {
+      "deviceName": { "type": "String" },
+      "count": { "type": "int" }
+    }
+  },
+
+  "import_fromDevice": "{statusText} from {deviceName}",
+  "@import_fromDevice": {
+    "placeholders": {
+      "deviceName": { "type": "String" },
+      "statusText": { "type": "String" }
+    }
+  },
+
+  "import_previewSource": "Source: {path}",
+  "@import_previewSource": {
+    "placeholders": {
+      "path": { "type": "String" }
+    }
+  },
+
+  "import_previewDestination": "Destination: {path}",
+  "@import_previewDestination": {
+    "placeholders": {
+      "path": { "type": "String" }
+    }
+  },
+
+  "import_result_abortReason": "Abort Reason",
+  "import_result_warnings": "Warnings ({count})",
+  "@import_result_warnings": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+
+  "progress_scanningCount": "Scanning ({count} files)",
+  "@progress_scanningCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "progress_scanning": "Scanning...",
+  "progress_fileCount": "{current} / {total} files",
+  "@progress_fileCount": {
+    "placeholders": {
+      "current": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "progress_phase_scanningMediaFiles": "Scanning media files...",
+  "progress_phase_checkingDiskSpace": "Checking destination disk space...",
+  "progress_phase_importing": "Importing...",
+  "progress_phase_checkingDestinationFolder": "Checking destination folders...",
+  "progress_phase_checkingDestinationDuplicate": "Checking for existing files...",
+  "progress_phase_parsingExif": " Parsing EXIF...",
+
+  "result_success": "Success",
+  "result_skipped": "Skipped",
+  "result_warning": "Warnings",
+  "result_error": "Errors",
+  "result_countUnit": "{count} files",
+  "@result_countUnit": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+
+  "result_duration": "Duration: {duration}",
+  "@result_duration": {
+    "placeholders": {
+      "duration": { "type": "String" }
+    }
+  },
+
+  "result_durationHoursMinutes": "{hours}h {minutes}m",
+  "@result_durationHoursMinutes": {
+    "placeholders": {
+      "hours": { "type": "int" },
+      "minutes": { "type": "int" }
+    }
+  },
+  "result_durationMinutesSeconds": "{minutes}m {seconds}s",
+  "@result_durationMinutesSeconds": {
+    "placeholders": {
+      "minutes": { "type": "int" },
+      "seconds": { "type": "int" }
+    }
+  },
+  "result_durationSeconds": "{seconds}s",
+  "@result_durationSeconds": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+
+  "result_status_cancelled": "Import was cancelled",
+  "result_status_error": "An error occurred during import",
+  "result_status_noNewFiles": "No new files to import",
+  "result_status_completed": "Import completed",
+
+  "error_metadataUpdateFailed": "Import aborted: Failed to update metadata.",
+  "error_importCancelled": "Import was cancelled.",
+  "error_nativeApiUnavailable": "Import aborted: Native API required for file date handling is unavailable.",
+  "error_fileIOFailed": "Import aborted: Failed to read/write file.",
+  "error_fileIOFailedWithName": "Import aborted: Failed to read/write file: {fileName}.",
+  "@error_fileIOFailedWithName": {
+    "placeholders": {
+      "fileName": { "type": "String" }
+    }
+  },
+  "error_genericImportFailed": "Import aborted due to an error.",
+  "error_browserOpenFailed": "Failed to open browser.",
+  "error_diskSpaceReadFailed": "Import aborted: Failed to read available disk space.",
+  "error_noSpaceLeft": "Import aborted: Not enough disk space.",
+  "error_noSpaceLeftWithName": "Import aborted: Not enough disk space for file: {fileName}.",
+  "@error_noSpaceLeftWithName": {
+    "placeholders": {
+      "fileName": { "type": "String" }
+    }
+  },
+  "error_noSpaceLeftWithSize": "Import aborted: Not enough disk space. Required: {required}, Available: {available}.",
+  "@error_noSpaceLeftWithSize": {
+    "placeholders": {
+      "required": { "type": "String" },
+      "available": { "type": "String" }
+    }
+  },
+  "error_destinationPathFailed": "Import aborted: Failed to resolve destination path.",
+
+  "update_error_checkFailed": "Failed to check for updates.",
+  "update_error_releaseNotFound": "No releases found.",
+  "update_error_apiFailed": "GitHub API error ({statusCode})",
+  "@update_error_apiFailed": {
+    "placeholders": {
+      "statusCode": { "type": "int" }
+    }
+  },
+
+  "update_message": "New version {version} is available.",
+  "@update_message": {
+    "placeholders": {
+      "version": { "type": "String" }
+    }
+  },
+  "update_message_prefix": "New version ",
+  "update_message_suffix": " is available.",
+  "update_download": " Download",
+
+  "enum_SubfolderPattern_DateOnly": "Date only",
+  "enum_SubfolderPattern_YearAndDate": "Year/Date",
+  "enum_SubfolderPattern_YearMonthAndDate": "Year/Month/Date",
+
+  "enum_DateFormatStyle_YYYYMMDD": "YYYY_MM_DD (4-digit year)",
+  "enum_DateFormatStyle_YYMMDD": "YY_MM_DD (2-digit year)",
+
+  "enum_DateSeparator_None": "None (20251224)",
+  "enum_DateSeparator_Underscore": "Underscore (2025_12_24)",
+  "enum_DateSeparator_Hyphen": "Hyphen (2025-12-24)",
+
+  "enum_MediaType_JPEGPhoto": "JPEG Photo",
+  "enum_MediaType_RAWPhoto": "RAW Photo",
+  "enum_MediaType_HEIFPhoto": "HEIF Photo",
+  "enum_MediaType_Video": "Video",
+  "enum_MediaType_ProxyVideo": "Proxy Video",
+  "enum_MediaType_VideoMeta": "Video Metadata",
+  "enum_MediaType_Unknown": "Unknown File",
+
+  "enum_ImportWarningType_DuplicateRenamed": "Saved with different name",
+  "enum_ImportWarningType_ExifReadFailed": "EXIF read failed",
+  "enum_ImportWarningType_DateRestoreFailed": "Date restore failed",
+  "enum_ImportWarningType_HashVerificationFailed": "Hash verification failed",
+  "enum_ImportWarningType_MetadataUpdateSkipped": "Metadata update skipped",
+  "enum_ImportWarningType_UnknownExtensionFound": "Unknown extension",
+  "enum_ImportWarningType_FileInUseSkipped": "File in use skipped",
+
+  "enum_ImportPhase_Initializing_dialogTitle": "Preparing...",
+  "enum_ImportPhase_ValidatingSDCard_dialogTitle": "Validating SD card...",
+  "enum_ImportPhase_CheckingWritePermission_dialogTitle": "Validating SD card...",
+  "enum_ImportPhase_ScanningMediaFiles_dialogTitle": "Scanning media...",
+  "enum_ImportPhase_DeterminingTargets_dialogTitle": "Determining targets...",
+  "enum_ImportPhase_ParsingExif_dialogTitle": "Parsing EXIF...",
+  "enum_ImportPhase_CheckingDestination_dialogTitle": "Checking destination...",
+  "enum_ImportPhase_CheckingDiskSpace_dialogTitle": "Checking disk space...",
+  "enum_ImportPhase_Importing_dialogTitle": "Importing...",
+
+  "enum_ImportPhase_Initializing_statusText": "Preparing...",
+  "enum_ImportPhase_ValidatingSDCard_statusText": "Validating SD card structure...",
+  "enum_ImportPhase_CheckingWritePermission_statusText": "Checking write permission...",
+  "enum_ImportPhase_ScanningMediaFiles_statusText": "Scanning...",
+  "enum_ImportPhase_DeterminingTargets_statusText": "Determining import targets...",
+  "enum_ImportPhase_ParsingExif_statusText": "Parsing EXIF...",
+  "enum_ImportPhase_CheckingDestination_statusText": "Checking destination...",
+  "enum_ImportPhase_CheckingDiskSpace_statusText": "Checking disk space...",
+  "enum_ImportPhase_Importing_statusText": "Copying...",
+
+  "tz_honolulu": "Honolulu",
+  "tz_anchorage": "Anchorage",
+  "tz_losAngeles": "Los Angeles",
+  "tz_denver": "Denver",
+  "tz_chicago": "Chicago",
+  "tz_newYork": "New York",
+  "tz_saoPaulo": "São Paulo",
+  "tz_azores": "Azores",
+  "tz_utc": "UTC",
+  "tz_london": "London",
+  "tz_paris": "Paris",
+  "tz_berlin": "Berlin",
+  "tz_athens": "Athens",
+  "tz_moscow": "Moscow",
+  "tz_dubai": "Dubai",
+  "tz_karachi": "Karachi",
+  "tz_kolkata": "Kolkata",
+  "tz_dhaka": "Dhaka",
+  "tz_bangkok": "Bangkok",
+  "tz_singapore": "Singapore",
+  "tz_hongKong": "Hong Kong",
+  "tz_shanghai": "Shanghai",
+  "tz_tokyo": "Tokyo",
+  "tz_seoul": "Seoul",
+  "tz_sydney": "Sydney",
+  "tz_auckland": "Auckland"
+}

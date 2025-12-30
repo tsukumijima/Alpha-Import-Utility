@@ -7,6 +7,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../l10n/generated/app_localizations.dart';
 import '../../models/github_release.dart';
 import '../../services/logging_service.dart';
 
@@ -35,7 +36,7 @@ class UpdateBanner extends StatelessWidget {
   });
 
   /// リリースページをブラウザで開く
-  Future<void> _openReleasePage(BuildContext context) async {
+  Future<void> _openReleasePage(BuildContext context, AppLocalizations l10n) async {
     final url = Uri.parse(release.htmlUrl);
     _log.info('Opening release page: ${release.htmlUrl}.', tag: 'UpdateBanner');
 
@@ -48,7 +49,7 @@ class UpdateBanner extends StatelessWidget {
         _log.warning('Failed to launch URL.', tag: 'UpdateBanner');
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('ブラウザを開けませんでした。')),
+            SnackBar(content: Text(l10n.error_browserOpenFailed)),
           );
         }
       }
@@ -61,7 +62,7 @@ class UpdateBanner extends StatelessWidget {
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ブラウザを開けませんでした。')),
+          SnackBar(content: Text(l10n.error_browserOpenFailed)),
         );
       }
     }
@@ -70,6 +71,7 @@ class UpdateBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Container(
       width: double.infinity,
@@ -96,13 +98,13 @@ class UpdateBanner extends StatelessWidget {
           // メッセージ
           Expanded(
             child: GestureDetector(
-              onTap: () => _openReleasePage(context),
+              onTap: () => _openReleasePage(context, l10n),
               child: MouseRegion(
                 cursor: SystemMouseCursors.click,
                 child: Text.rich(
                   TextSpan(
                     children: [
-                      const TextSpan(text: '新しいバージョン '),
+                      TextSpan(text: l10n.update_message_prefix),
                       TextSpan(
                         text: 'v${release.version}',
                         style: TextStyle(
@@ -110,9 +112,9 @@ class UpdateBanner extends StatelessWidget {
                           color: theme.colorScheme.primary,
                         ),
                       ),
-                      const TextSpan(text: ' が利用可能です。'),
+                      TextSpan(text: l10n.update_message_suffix),
                       TextSpan(
-                        text: ' ダウンロード',
+                        text: l10n.update_download,
                         style: TextStyle(
                           color: theme.colorScheme.primary,
                           decoration: TextDecoration.underline,
@@ -137,7 +139,7 @@ class UpdateBanner extends StatelessWidget {
               minWidth: 32,
               minHeight: 32,
             ),
-            tooltip: '閉じる',
+            tooltip: l10n.tooltip_close,
             color: Colors.white54,
             hoverColor: Colors.white.withValues(alpha: 0.1),
           ),
