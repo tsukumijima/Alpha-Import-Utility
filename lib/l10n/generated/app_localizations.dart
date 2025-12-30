@@ -518,6 +518,12 @@ abstract class AppLocalizations {
   /// **'取り込み中断'**
   String get import_dialog_cancelled;
 
+  /// No description provided for @import_dialog_error.
+  ///
+  /// In ja, this message translates to:
+  /// **'取り込みエラー'**
+  String get import_dialog_error;
+
   /// No description provided for @import_cancelConfirm_title.
   ///
   /// In ja, this message translates to:

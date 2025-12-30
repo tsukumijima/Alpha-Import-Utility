@@ -170,6 +170,8 @@ class ImportProgressIndicator extends StatelessWidget {
           const SizedBox(height: 4),
 
           // ファイルパス
+          // "From:" / "To:" は意図的にローカライズせず、英語のまま表示する
+          // 日本語でも英語表記の方が視覚的にすっきりして見栄えが良いため
           Text(
             'From: ${file.relativePath}',
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white54),

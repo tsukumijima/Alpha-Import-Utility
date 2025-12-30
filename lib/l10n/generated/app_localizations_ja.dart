@@ -227,6 +227,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get import_dialog_cancelled => '取り込み中断';
 
   @override
+  String get import_dialog_error => '取り込みエラー';
+
+  @override
   String get import_cancelConfirm_title => '取り込みをキャンセルしますか？';
 
   @override

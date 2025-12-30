@@ -232,6 +232,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get import_dialog_cancelled => 'Import Cancelled';
 
   @override
+  String get import_dialog_error => 'Import Error';
+
+  @override
   String get import_cancelConfirm_title => 'Cancel import?';
 
   @override

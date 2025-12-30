@@ -95,6 +95,7 @@
   "import_dialog_preview": "Import Preview",
   "import_dialog_completed": "Import Complete",
   "import_dialog_cancelled": "Import Cancelled",
+  "import_dialog_error": "Import Error",
 
   "import_cancelConfirm_title": "Cancel import?",
   "import_cancelConfirm_preparing": "Stop scanning and close the dialog.",

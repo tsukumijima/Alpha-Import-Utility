@@ -95,6 +95,7 @@
   "import_dialog_preview": "取り込み前プレビュー",
   "import_dialog_completed": "取り込み完了",
   "import_dialog_cancelled": "取り込み中断",
+  "import_dialog_error": "取り込みエラー",
 
   "import_cancelConfirm_title": "取り込みをキャンセルしますか？",
   "import_cancelConfirm_preparing": "スキャンを中止してダイアログを閉じます。",

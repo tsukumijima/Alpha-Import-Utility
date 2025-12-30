@@ -400,7 +400,7 @@ class _ImportDialogState extends State<ImportDialog> {
         return l10n.import_dialog_cancelled;
       }
       if ((_result?.errorCount ?? 0) > 0) {
-        return l10n.import_dialog_cancelled;
+        return l10n.import_dialog_error;
       }
       return l10n.import_dialog_completed;
     }

@@ -168,6 +168,13 @@ class DeviceDetector {
   /// ポーリングが一時停止中かどうか
   bool _isPaused = false;
 
+  /// ポーリングスキャンが実行中かどうか
+  ///
+  /// Timer.periodic のコールバックが async で scan() を await する際、
+  /// スキャンに時間がかかると次のタイマーイベントと重複する可能性があるため、
+  /// このフラグで多重実行を防止する。
+  bool _isPollingInProgress = false;
+
   /// 現在検出されているデバイス
   List<DetectedDevice> _currentDevices = [];
 
@@ -470,16 +477,30 @@ class DeviceDetector {
     _pollingTimer = Timer.periodic(
       Duration(seconds: _pollingIntervalSeconds),
       (_) async {
-        final previousPaths = _currentDevices.map((d) => d.mountPoint).toSet();
-        final devices = await scan();
-        final currentPaths = devices.map((d) => d.mountPoint).toSet();
+        // 前回のスキャンが完了していなければスキップ
+        if (_isPollingInProgress) {
+          _log.debug(
+            'Skipping polling scan: previous scan still in progress.',
+            tag: 'DeviceDetector',
+          );
+          return;
+        }
 
-        // 変更があれば通知
-        if (!_setEquals(previousPaths, currentPaths)) {
-          _log.info('Device list changed.', tag: 'DeviceDetector');
-          if (onDevicesChanged != null) {
-            onDevicesChanged!(devices);
+        _isPollingInProgress = true;
+        try {
+          final previousPaths = _currentDevices.map((d) => d.mountPoint).toSet();
+          final devices = await scan();
+          final currentPaths = devices.map((d) => d.mountPoint).toSet();
+
+          // 変更があれば通知
+          if (!_setEquals(previousPaths, currentPaths)) {
+            _log.info('Device list changed.', tag: 'DeviceDetector');
+            if (onDevicesChanged != null) {
+              onDevicesChanged!(devices);
+            }
           }
+        } finally {
+          _isPollingInProgress = false;
         }
       },
     );
