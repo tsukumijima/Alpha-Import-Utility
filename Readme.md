@@ -1,5 +1,8 @@
 # α Import Utility
 
+> [!TIP]
+> **🌐 English version is available: [Readme_English.md](Readme_English.md)**
+
 <img src="docs/images/hero.png" alt="α Import Utility のメイン画面。Sony α のイメージカラーであるオレンジをアクセントにした黒基調の UI で、3つのインポートモードを表示している。" width="600"><br>
 
 **Sony α カメラやその SD カードから、未取り込みの写真・動画を PC に安全に取り込むデスクトップアプリです。α6700 にて検証しています。**
@@ -198,10 +201,11 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 
 #### 基本設定
 
-<img src="docs/images/settings-basic.png" alt="設定画面の基本設定タブ。保存先フォルダ、サブフォルダ設定、日付フォーマットが表示されている。" width="500"><br>
+<img src="docs/images/settings-basic.png" alt="設定画面の基本設定タブ。" width="500"><br>
 
 | 設定項目 | 説明 |
 |----------|------|
+| **言語** | アプリの表示言語（日本語 / English） |
 | **保存先フォルダ** | 取り込んだ写真・動画を保存するフォルダ |
 | **サブフォルダ設定** | 撮影日ごとのフォルダ階層構造（日付のみ / 年/日付 / 年/月/日付） |
 | **日付フォーマット** | フォルダ名の日付表記形式（4桁年 / 2桁年、区切り文字） |
@@ -209,7 +213,7 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 
 #### 取り込みオプション
 
-<img src="docs/images/settings-options.png" alt="設定画面の取り込みオプションタブ。EXIF 日時復元、カメラタイムゾーン、動画メタデータ設定が表示されている。" width="500"><br>
+<img src="docs/images/settings-options.png" alt="設定画面の取り込みオプションタブ。" width="500"><br>
 
 | 設定項目 | 説明 | デフォルト |
 |----------|------|-----------|
