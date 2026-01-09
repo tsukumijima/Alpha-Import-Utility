@@ -139,68 +139,68 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
     final l10n = AppLocalizations.of(context);
 
     return Dialog(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 600),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ダイアログヘッダー
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-                child: Row(
-                  children: [
-                    Icon(Icons.settings, color: theme.colorScheme.primary),
-                    const SizedBox(width: 12),
-                    Text(l10n.settings_title, style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-
-              // タブバー
-              TabBar(
-                controller: _tabController,
-                tabs: [
-                  Tab(text: l10n.settings_tab_basic),
-                  Tab(text: l10n.settings_tab_options),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 600),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ダイアログヘッダー
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
+              child: Row(
+                children: [
+                  Icon(Icons.settings, color: theme.colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Text(l10n.settings_title, style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
                 ],
               ),
+            ),
 
-              // タブコンテンツ
-              Flexible(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildBasicSettingsTab(theme, l10n),
-                    _buildOptionsTab(theme, l10n),
-                  ],
-                ),
-              ),
+            // タブバー
+            TabBar(
+              controller: _tabController,
+              tabs: [
+                Tab(text: l10n.settings_tab_basic),
+                Tab(text: l10n.settings_tab_options),
+              ],
+            ),
 
-              // アクションボタン
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: _handleCancel,
-                      child: Text(l10n.button_cancel),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      // 保存先が設定済みかつ変更がある場合のみ有効
-                      onPressed: _settings.hasDestinationFolder && _hasChanges
-                          ? () => Navigator.pop(context, _settings)
-                          : null,
-                      icon: const Icon(Icons.save),
-                      label: Text(l10n.button_save),
-                    ),
-                  ],
-                ),
+            // タブコンテンツ
+            Flexible(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildBasicSettingsTab(theme, l10n),
+                  _buildOptionsTab(theme, l10n),
+                ],
               ),
-            ],
-          ),
+            ),
+
+            // アクションボタン
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _handleCancel,
+                    child: Text(l10n.button_cancel),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    // 保存先が設定済みかつ変更がある場合のみ有効
+                    onPressed: _settings.hasDestinationFolder && _hasChanges
+                        ? () => Navigator.pop(context, _settings)
+                        : null,
+                    icon: const Icon(Icons.save),
+                    label: Text(l10n.button_save),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
+      ),
     );
   }
 
