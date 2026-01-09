@@ -944,6 +944,19 @@ class ImportEngine {
       totalSize += candidate.file.fileSize;
     }
 
+    // Checking destination フェーズで追加されたスキップ済みレコードを保存
+    // 注意: 最初の保存では Determining targets フェーズで追加されたレコードのみを保存するため、
+    // Checking destination フェーズで追加されたレコードは別途保存が必要
+    if (updatedRecords.isNotEmpty) {
+      final currentMetadata = await _metadataManager.load();
+      final finalMetadata = currentMetadata.upsertRecords(updatedRecords);
+      await _metadataManager.save(finalMetadata);
+      _log.debug(
+        'Saved ${updatedRecords.length} skipped record(s) to metadata after destination check.',
+        tag: 'ImportEngine',
+      );
+    }
+
     return (items: items, totalSize: totalSize, skippedCount: skippedCount);
   }
 
