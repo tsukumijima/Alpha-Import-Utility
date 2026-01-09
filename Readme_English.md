@@ -1,22 +1,22 @@
 # α Import Utility
 
-> [!TIP]
-> **🌐 日本語版はこちら: [Readme.md](Readme.md)**
+<img src="https://github.com/user-attachments/assets/9ac38a04-7607-41b0-8cef-2d5fab8d0d43" alt="Main screen of α Import Utility. A dark-themed UI with Sony α's signature orange accent color, showing three import modes." width="600"><br>
 
-<img src="docs/images/hero.png" alt="Main screen of α Import Utility. A dark-themed UI with Sony α's signature orange accent color, showing three import modes." width="600"><br>
+> [!TIP]  
+> **🌐 日本語版はこちら: [Readme.md](Readme.md)**
 
 **A desktop application for safely importing un-imported photos and videos from Sony α cameras or their SD cards to your PC. Verified with the α6700.**
 
-> [!IMPORTANT]
+> [!IMPORTANT]  
 > **This app is designed to create a complete backup of all photos taken with your camera, without missing a single shot.**
 > Organization and editing can be done in photo management software. This app is specialized for "reliably saving all data captured by your camera to your PC, including blurry shots."
 > Ensuring that no photos are unintentionally left behind is the most critical design goal.
 
-> [!WARNING]
+> [!WARNING]  
 > **This is not an official Sony application; it is unofficial software developed by an individual.**
 > While it has been designed with great care, **please use it at your own risk.**
 
-> [!WARNING]
+> [!WARNING]  
 > **Testing has only been performed on the Sony α6700.**
 > It is likely to work with cameras from the same generation (those that record XAVC S format videos), but older cameras that only support AVCHD format may not work properly.
 > If you have tested it with other models, please report your findings in an Issue.
@@ -153,7 +153,7 @@ As software that handles precious photos I've personally taken over more than 10
 | Video Metadata | `.XML` | `PRIVATE/M4ROOT/CLIP/` |
 | Proxy Video | `.MP4` | `PRIVATE/M4ROOT/SUB/` |
 
-> [!NOTE]
+> [!NOTE]  
 > Video metadata (XML) and proxy video import can be toggled on/off in settings.
 
 ## Installation
@@ -168,19 +168,19 @@ As software that handles precious photos I've personally taken over more than 10
 
 ### Launching on Windows
 
-<img src="docs/images/windows-folder.png" alt="Folder structure on Windows. Shows α Import Utility.exe." width="500"><br>
+<img src="https://github.com/user-attachments/assets/7d2d368b-c5b0-4c40-ba5c-40e744737802" alt="Folder structure on Windows. Shows α Import Utility.exe." width="600"><br>
 
 1. Move the extracted folder to a location of your choice. We recommend somewhere outside of Program Files, such as `C:\Applications\α Import Utility`.
 2. Double-click `α Import Utility.exe` to launch.
 
 ### Launching on macOS
 
-<img src="docs/images/macos-folder.png" alt="Folder structure on macOS." width="500"><br>
+<img src="https://github.com/user-attachments/assets/16fc80cc-6e5f-4a37-9c2f-613693674d5a" alt="Folder structure on macOS." width="450"><br>
 
 1. Drag and drop the extracted `α Import Utility.app` to your `Applications` folder.
 2. On first launch, you'll need to follow these steps to bypass Gatekeeper's security warning:
 
-> [!WARNING]
+> [!WARNING]  
 > **macOS 14 Sequoia and later have enhanced security for unsigned apps.**
 > You may see messages like "Cannot be opened because the developer cannot be verified" or "Apple cannot check it for malicious software" on first launch.
 >
@@ -201,7 +201,8 @@ Click the gear icon in the upper right to open the settings screen.
 
 #### Basic Settings
 
-<img src="docs/images/settings-basic.png" alt="Settings screen Basic Settings tab." width="500"><br>
+<img src="https://github.com/user-attachments/assets/9a3a19b4-75da-4c32-a287-77c17644f359" width="49%">
+<img src="https://github.com/user-attachments/assets/3ca7c996-1db2-4c09-8300-f9eafb00802c" width="49%"><br>
 
 | Setting | Description |
 |---------|-------------|
@@ -213,7 +214,8 @@ Click the gear icon in the upper right to open the settings screen.
 
 #### Import Options
 
-<img src="docs/images/settings-options.png" alt="Settings screen Import Options tab." width="500"><br>
+<img src="https://github.com/user-attachments/assets/d525d2d5-1cab-4ee2-be5c-50524934ff46" width="49%">
+<img src="https://github.com/user-attachments/assets/4bcf1637-3d56-4d7a-9661-5148d56f5275" width="49%"><br>
 
 | Setting | Description | Default |
 |---------|-------------|---------|
@@ -224,22 +226,43 @@ Click the gear icon in the upper right to open the settings screen.
 
 ### 2. Connecting a Device
 
-<img src="docs/images/device-detected.png" alt="SD card detected and displayed as a device card on the main screen. Shows device name and capacity information." width="600"><br>
+<img src="https://github.com/user-attachments/assets/04c11b9f-34ad-4869-a2a2-5e2e8f19642e" alt="SD card detected and displayed as a device card on the main screen. Shows device name and capacity information." width="600"><br>
 
 When you connect a camera via USB cable or insert an SD card into a card reader, it is automatically detected and displayed on the main screen.
 
 ### 3. Starting Import
 
-Click on the detected device's card to start the import.
+<img src="https://github.com/user-attachments/assets/6758fef2-6dea-4cf1-9838-eddcbe23dc9c" width="49%">
+<img src="https://github.com/user-attachments/assets/afcd0eb0-1566-45f8-8682-5bfce16211fe" width="49%"><br>
 
-<img src="docs/images/import-progress.png" alt="Import in progress dialog. Shows current file name, overall progress bar, and item count." width="450"><br>
+Click on the detected device's card to start scanning for import targets.
 
-You can cancel anytime during import using the "Cancel" button.
-When cancelled, the current file copy completes before stopping, so no incomplete files are left behind.
+> [!NOTE]
+> While we've implemented scanning to be as fast as possible, scanning inevitably takes time since we perform a full scan to ensure reliable import.
+
+---
+
+<img src="https://github.com/user-attachments/assets/3057173f-b93a-4492-b9a8-25c31428c236" width="400"><br>
+
+When "Import Preview" is enabled, a list of import targets is displayed before import.
+
+---
+
+<img src="https://github.com/user-attachments/assets/a940efc6-3bf1-4009-8d14-8dab5ea7c2ae" width="400"><br>
+
+Once scanning is complete, import proceeds in the order: DCIM (photos) → PRIVATE/M4ROOT/CLIP (videos) → PRIVATE/M4ROOT/SUB (proxy videos).
+
+> [!TIP]
+> You can cancel anytime during import using the "Cancel" button.  
+> When cancelled, the current file copy completes before stopping, so no incomplete files are left behind.
+
+> [!NOTE]
+> I actually wanted to implement photo preview during import like EOS Utility, but found that implementing preview would slow down import due to file I/O, so I gave up on that feature...
 
 ### 4. Import Complete
 
-<img src="docs/images/import-complete.png" alt="Import complete dialog. Shows success count, skipped count, warning count, and processing time." width="450"><br>
+<img src="https://github.com/user-attachments/assets/c442e8c2-6bfc-4ab0-93ce-4244527a5cd8" width="49%">
+<img src="https://github.com/user-attachments/assets/733f2acd-be5f-4b10-9ce6-d0e63b0f0357" width="49%"><br>
 
 When import is complete, a summary of results is displayed.
 Click "Open Destination" to open the destination folder directly.
@@ -248,31 +271,25 @@ Click "Open Destination" to open the destination folder directly.
 
 ### Import from Camera
 
-<img src="docs/images/import-camera.png" alt="Import from Camera section. Shows USB-connected camera being detected." width="600"><br>
-
 Connect your camera to the PC via USB cable and have it recognized in USB Mass Storage (MSC) mode.
 When the camera is detected, it appears in the "Import from Camera" section.
 
-> ![WARNING]
+> [!WARNING]  
 > **MTP (Media Transfer Protocol) mode connection is not supported.**
 > **Always connect in USB Mass Storage (MSC) mode.**
 
 ### Import from SD Card
-
-<img src="docs/images/import-sdcard.png" alt="Import from SD Card section. Shows SD card being detected." width="600"><br>
 
 Connect an SD card to the PC via a card reader.
 When the SD card is detected, it appears in the "Import from SD Card" section.
 
 ### Import from Folder
 
-<img src="docs/images/import-folder.png" alt="Import from Folder section. Shows folder selection button." width="600"><br>
-
 Click "Select Folder..." to directly specify a backup folder that maintains the SD card structure.
 Of course, it supports folders not only on internal storage but also on USB SSDs or USB drives.
 Convenient for re-importing from past SD card backups.
 
-> [!WARNING]
+> [!WARNING]  
 > **Folders that cannot be recognized as Sony α SD card structure cannot be imported.**
 > Make sure to specify the SD card root folder where both `DCIM/` and `PRIVATE/M4ROOT/CLIP/` exist.
 
@@ -318,7 +335,7 @@ Sets the creation and modification dates of imported files to match the shooting
 When the source file's creation/modification dates are close to the EXIF shooting date, the original dates are preserved; when significantly different, the EXIF shooting date is used.
 For timezone, if timezone information is recorded in EXIF, that information is used; if not, the camera timezone specified in settings is used.
 
-> [!TIP]
+> [!TIP]  
 > The α6700 v2.0 has been confirmed to properly record timezone information set on the camera in EXIF based on EXIF v2.3.2 specification.
 > This likely applies to same-generation cameras as well.
 > Note that older cameras may not have timezone recorded per EXIF specification.
