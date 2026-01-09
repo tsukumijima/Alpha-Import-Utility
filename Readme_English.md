@@ -1,6 +1,6 @@
 # α Import Utility
 
-<img src="https://github.com/user-attachments/assets/9ac38a04-7607-41b0-8cef-2d5fab8d0d43" alt="Main screen of α Import Utility. A dark-themed UI with Sony α's signature orange accent color, showing three import modes." width="600"><br>
+<img src="https://github.com/user-attachments/assets/4627d06a-d488-4550-9e9f-b64424cd4b5c" alt="Main screen of α Import Utility. A dark-themed UI with Sony α's signature orange accent color, showing three import modes." width="600"><br>
 
 > [!TIP]  
 > **🌐 日本語版はこちら: [Readme.md](Readme.md)**
@@ -201,8 +201,8 @@ Click the gear icon in the upper right to open the settings screen.
 
 #### Basic Settings
 
-<img src="https://github.com/user-attachments/assets/9a3a19b4-75da-4c32-a287-77c17644f359" width="49%">
-<img src="https://github.com/user-attachments/assets/3ca7c996-1db2-4c09-8300-f9eafb00802c" width="49%"><br>
+<img src="https://github.com/user-attachments/assets/7365d288-aaab-48ee-98c3-e5e89e253537" width="49%">
+<img src="https://github.com/user-attachments/assets/19d4ebc6-e03e-4ef6-8c25-2b4e9d765b06" width="49%"><br>
 
 | Setting | Description |
 |---------|-------------|
@@ -214,8 +214,8 @@ Click the gear icon in the upper right to open the settings screen.
 
 #### Import Options
 
-<img src="https://github.com/user-attachments/assets/d525d2d5-1cab-4ee2-be5c-50524934ff46" width="49%">
-<img src="https://github.com/user-attachments/assets/4bcf1637-3d56-4d7a-9661-5148d56f5275" width="49%"><br>
+<img src="https://github.com/user-attachments/assets/367883c8-1a97-4fad-a7a6-06b1a90c70da" width="49%">
+<img src="https://github.com/user-attachments/assets/9f557f1d-7d2b-4dc8-a42b-f66547a7edf2" width="49%"><br>
 
 | Setting | Description | Default |
 |---------|-------------|---------|
@@ -226,14 +226,14 @@ Click the gear icon in the upper right to open the settings screen.
 
 ### 2. Connecting a Device
 
-<img src="https://github.com/user-attachments/assets/04c11b9f-34ad-4869-a2a2-5e2e8f19642e" alt="SD card detected and displayed as a device card on the main screen. Shows device name and capacity information." width="600"><br>
+<img src="https://github.com/user-attachments/assets/26969536-110d-4564-a4db-dc749cab8467" alt="SD card detected and displayed as a device card on the main screen. Shows device name and capacity information." width="600"><br>
 
 When you connect a camera via USB cable or insert an SD card into a card reader, it is automatically detected and displayed on the main screen.
 
 ### 3. Starting Import
 
-<img src="https://github.com/user-attachments/assets/6758fef2-6dea-4cf1-9838-eddcbe23dc9c" width="49%">
-<img src="https://github.com/user-attachments/assets/afcd0eb0-1566-45f8-8682-5bfce16211fe" width="49%"><br>
+<img src="https://github.com/user-attachments/assets/96f1597c-4f18-4ea0-9d53-8f207315ed41" width="49%">
+<img src="https://github.com/user-attachments/assets/0bcf3d23-f57d-4f50-8621-aeeae63900a6" width="49%"><br>
 
 Click on the detected device's card to start scanning for import targets.
 
