@@ -162,8 +162,8 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 
 1. [Releases ページ](https://github.com/tsukumijima/Alpha-Import-Utility/releases) にアクセスします。
 2. 最新リリースから、お使いの OS に対応した zip ファイルをダウンロードします。
-   - Windows: `α Import Utility vX.X.X-windows.zip`
-   - macOS: `α Import Utility vX.X.X-macos.zip`
+   - Windows: `Alpha-Import-Utility-vX.X.X-windows.zip`
+   - macOS: `Alpha-Import-Utility-vX.X.X-macos.zip`
 3. ダウンロードした zip ファイルを展開します。
 
 ### Windows での起動

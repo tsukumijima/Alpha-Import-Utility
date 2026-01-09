@@ -162,8 +162,8 @@ As software that handles precious photos I've personally taken over more than 10
 
 1. Visit the [Releases page](https://github.com/tsukumijima/Alpha-Import-Utility/releases).
 2. Download the zip file for your OS from the latest release.
-   - Windows: `α Import Utility vX.X.X-windows.zip`
-   - macOS: `α Import Utility vX.X.X-macos.zip`
+   - Windows: `Alpha-Import-Utility-vX.X.X-windows.zip`
+   - macOS: `Alpha-Import-Utility-vX.X.X-macos.zip`
 3. Extract the downloaded zip file.
 
 ### Launching on Windows
