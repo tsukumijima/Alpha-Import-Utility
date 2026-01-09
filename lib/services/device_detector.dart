@@ -259,59 +259,71 @@ class DeviceDetector {
         continue;
       }
 
-      // PMHOME ボリュームはスキップ（ライセンス情報のみ）
-      final isPmhomeVolume = await _isPMHOMEVolume(
-        disk,
-        mountPoint,
-        volumeName,
-      );
-      if (isPmhomeVolume) {
-        _log.debug('Skipping PMHOME volume (license info only).', tag: 'DeviceDetector');
-        continue;
-      }
+      // 各デバイスの処理を try-catch で囲み、一つのデバイスでエラーが発生しても
+      // 他のデバイスのスキャンは継続できるようにする
+      // （例: SD カードリーダーにカードが入っていない場合など）
+      try {
+        // PMHOME ボリュームはスキップ（ライセンス情報のみ）
+        final isPmhomeVolume = await _isPMHOMEVolume(
+          disk,
+          mountPoint,
+          volumeName,
+        );
+        if (isPmhomeVolume) {
+          _log.debug('Skipping PMHOME volume (license info only).', tag: 'DeviceDetector');
+          continue;
+        }
 
-      // 同一マウントポイントの重複を排除
-      final normalizedMountPoint = _normalizeMountPoint(mountPoint);
-      if (seenMountPoints.contains(normalizedMountPoint)) {
+        // 同一マウントポイントの重複を排除
+        final normalizedMountPoint = _normalizeMountPoint(mountPoint);
+        if (seenMountPoints.contains(normalizedMountPoint)) {
+          _log.debug(
+            'Skipping duplicated mount point: $mountPoint.',
+            tag: 'DeviceDetector',
+          );
+          continue;
+        }
+        seenMountPoints.add(normalizedMountPoint);
+
+        // macOS システムボリュームを除外
+        if (_shouldExcludeDevice(mountPoint, volumeName)) {
+          _log.debug(
+            'Excluding system volume: $volumeName at $mountPoint.',
+            tag: 'DeviceDetector',
+          );
+          continue;
+        }
+
+        // Sony α SD カード構造を検証
+        final sonyFs = SonyFilesystemService(mountPoint);
+        final validation = await sonyFs.validate();
+
+        // 空き容量情報を取得
+        final diskSpace = await _getDiskSpace(
+          mountPoint,
+          disk.size,
+        );
+
+        final device = DetectedDevice(
+          mountPoint: mountPoint,
+          name: disk.description,
+          totalSize: diskSpace?.total ?? disk.size,
+          usedSize: diskSpace?.used,
+          freeSize: diskSpace?.free,
+          isSonyAlphaCard: validation.isValid,
+          type: _determineDeviceType(disk),
+        );
+
+        devices.add(device);
+        _log.logDeviceDetected(device.displayName, mountPoint, validation.isValid);
+      } on FileSystemException catch (ex) {
+        // デバイスが準備できていない場合（SD カード未挿入など）はスキップ
         _log.debug(
-          'Skipping duplicated mount point: $mountPoint.',
+          'Skipping device $volumeName at $mountPoint (not ready): $ex.',
           tag: 'DeviceDetector',
         );
         continue;
       }
-      seenMountPoints.add(normalizedMountPoint);
-
-      // macOS システムボリュームを除外
-      if (_shouldExcludeDevice(mountPoint, volumeName)) {
-        _log.debug(
-          'Excluding system volume: $volumeName at $mountPoint.',
-          tag: 'DeviceDetector',
-        );
-        continue;
-      }
-
-      // Sony α SD カード構造を検証
-      final sonyFs = SonyFilesystemService(mountPoint);
-      final validation = await sonyFs.validate();
-
-      // 空き容量情報を取得
-      final diskSpace = await _getDiskSpace(
-        mountPoint,
-        disk.size,
-      );
-
-      final device = DetectedDevice(
-        mountPoint: mountPoint,
-        name: disk.description,
-        totalSize: diskSpace?.total ?? disk.size,
-        usedSize: diskSpace?.used,
-        freeSize: diskSpace?.free,
-        isSonyAlphaCard: validation.isValid,
-        type: _determineDeviceType(disk),
-      );
-
-      devices.add(device);
-      _log.logDeviceDetected(device.displayName, mountPoint, validation.isValid);
     }
 
     return devices;
@@ -358,11 +370,14 @@ class DeviceDetector {
   /// PMHOME ボリュームかどうかを判定
   ///
   /// ラベルが取得できない環境向けに、容量とルート直下の構造から判定する。
+  /// SD カードリーダーにカードが入っていない場合など、デバイスが準備できていない
+  /// 状態ではファイルシステムアクセスで例外が発生するため、その場合は false を返す。
   Future<bool> _isPMHOMEVolume(
     Disk disk,
     String mountPoint,
     String volumeName,
   ) async {
+    // ボリューム名でまず判定（ファイルシステムアクセス不要）
     final normalizedVolumeName = volumeName.trim();
     if (normalizedVolumeName.isNotEmpty && normalizedVolumeName.toUpperCase() == 'PMHOME') {
       return true;
@@ -373,54 +388,106 @@ class DeviceDetector {
       return true;
     }
 
+    // 容量が大きすぎる場合は PMHOME ではない
     final totalSize = disk.size;
     if (totalSize != null && totalSize > _pmhomeMaxBytes) {
       return false;
     }
 
-    final rootDir = Directory(mountPoint);
-    if (!await rootDir.exists()) {
-      return false;
-    }
-
-    final rootEntries = await rootDir.list(followLinks: false).toList();
-    if (rootEntries.isEmpty) {
-      return false;
-    }
-
-    final rootEntryNames = rootEntries.map((entry) => p.basename(entry.path)).toList();
-    final hasLicenseFolder = rootEntryNames.any(
-      (entryName) => entryName.toUpperCase() == 'LICENSE',
-    );
-    if (!hasLicenseFolder) {
-      return false;
-    }
-
-    // ルート直下に LICENSE 以外のフォルダやファイルがある場合は PMHOME とみなさない
-    const allowedSystemEntries = [
-      'LICENSE',
-      'SYSTEM VOLUME INFORMATION',
-      '\$RECYCLE.BIN',
-    ];
-    for (final entryName in rootEntryNames) {
-      if (!allowedSystemEntries.contains(entryName.toUpperCase())) {
+    // ファイルシステムへのアクセスを試みる
+    // SD カードリーダーにカードが入っていない場合など、デバイスが準備できていない
+    // 状態では例外が発生するため、try-catch で囲む
+    try {
+      final rootDir = Directory(mountPoint);
+      if (!await rootDir.exists()) {
         return false;
+      }
+
+      final rootEntries = await rootDir.list(followLinks: false).toList();
+      if (rootEntries.isEmpty) {
+        return false;
+      }
+
+      final rootEntryNames = rootEntries.map((entry) => p.basename(entry.path)).toList();
+      final hasLicenseFolder = rootEntryNames.any(
+        (entryName) => entryName.toUpperCase() == 'LICENSE',
+      );
+      if (!hasLicenseFolder) {
+        return false;
+      }
+
+      // ルート直下に LICENSE 以外のフォルダやファイルがある場合は PMHOME とみなさない
+      const allowedSystemEntries = [
+        'LICENSE',
+        'SYSTEM VOLUME INFORMATION',
+        '\$RECYCLE.BIN',
+      ];
+      for (final entryName in rootEntryNames) {
+        if (!allowedSystemEntries.contains(entryName.toUpperCase())) {
+          return false;
+        }
+      }
+
+      return true;
+    } on FileSystemException catch (ex) {
+      // デバイスが準備できていない場合（SD カード未挿入など）
+      _log.debug(
+        'Cannot access mount point $mountPoint (device may not be ready): $ex.',
+        tag: 'DeviceDetector',
+      );
+      return false;
+    }
+  }
+
+  /// SD カードリーダーを示すボリューム名のパターン
+  ///
+  /// Windows では SD カードリーダーが disk.card=false として認識されることがあるため、
+  /// ボリューム名からカードリーダーを推測する。
+  static final List<RegExp> _cardReaderNamePatterns = [
+    RegExp(r'card\s*reader', caseSensitive: false),
+    RegExp(r'flash\s*reader', caseSensitive: false),
+    RegExp(r'sd\s*card', caseSensitive: false),
+    RegExp(r'memory\s*card', caseSensitive: false),
+    RegExp(r'multi.*reader', caseSensitive: false),
+  ];
+
+  /// ディスク情報からデバイスタイプを判定
+  ///
+  /// 判定優先順位:
+  /// 1. disk.card == true → SD カード
+  /// 2. ボリューム名がカードリーダーを示す場合 → SD カード
+  /// 3. disk.usb == true → USB ストレージ（カメラ直接接続など）
+  /// 4. disk.removable == true → 不明（SD カードとして扱う）
+  DeviceType _determineDeviceType(Disk disk) {
+    // disks_desktop が明示的にカードとして認識している場合
+    if (disk.card == true) {
+      return DeviceType.SDCard;
+    }
+
+    // ボリューム名からカードリーダーを推測
+    // Windows では SD カードリーダーが disk.card=false, disk.usb=true と
+    // 認識されることがあるため、名前ベースで判定する
+    final volumeName = disk.description;
+    for (final pattern in _cardReaderNamePatterns) {
+      if (pattern.hasMatch(volumeName)) {
+        _log.debug(
+          'Detected SD card reader by volume name pattern: $volumeName.',
+          tag: 'DeviceDetector',
+        );
+        return DeviceType.SDCard;
       }
     }
 
-    return true;
-  }
-
-  /// ディスク情報からデバイスタイプを判定
-  DeviceType _determineDeviceType(Disk disk) {
-    // disks_desktop のプロパティに基づいて判定
-    if (disk.card == true) {
-      return DeviceType.SDCard;
-    } else if (disk.usb == true) {
+    // USB デバイスとして認識されている場合（カメラ直接接続など）
+    if (disk.usb == true) {
       return DeviceType.USBStorage;
-    } else if (disk.removable) {
+    }
+
+    // リムーバブルだが上記に該当しない場合
+    if (disk.removable) {
       return DeviceType.SDCard;
     }
+
     return DeviceType.Unknown;
   }
 
