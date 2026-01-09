@@ -1,7 +1,7 @@
 name: alpha_import_utility
 description: "Sony α カメラの SD カードから未取り込みの写真・動画を自動で取り込むアプリ"
 publish_to: 'none'
-version: 1.0.0+1
+version: 0.1.0+1
 
 environment:
   # Flutter 3.35 系に固定する

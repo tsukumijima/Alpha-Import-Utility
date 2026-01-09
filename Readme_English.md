@@ -238,7 +238,8 @@ When you connect a camera via USB cable or insert an SD card into a card reader,
 Click on the detected device's card to start scanning for import targets.
 
 > [!NOTE]
-> While we've implemented scanning to be as fast as possible, scanning inevitably takes time since we perform a full scan to ensure reliable import.
+> **While we've implemented scanning to be as fast as possible, scanning inevitably takes time since we perform a full scan to ensure reliable import.**  
+> Especially during the first import, scanning may take tens of minutes to several hours since the metadata file needs to be built from scratch.
 
 ---
 
