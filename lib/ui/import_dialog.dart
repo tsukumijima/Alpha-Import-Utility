@@ -64,10 +64,21 @@ class _ImportDialogState extends State<ImportDialog> {
   /// 準備フェーズ計測用ストップウォッチ
   final Stopwatch _prepareStopwatch = Stopwatch();
 
+  /// 初期化済みフラグ
+  ///
+  /// didChangeDependencies は複数回呼ばれる可能性があるため、
+  /// 初期化処理が一度だけ実行されるようにするためのフラグ。
+  bool _isInitialized = false;
+
   @override
-  void initState() {
-    super.initState();
-    _initializeImportFlow();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // initState() では AppLocalizations.of(context) が使えないため、
+    // didChangeDependencies() で初期化を行う
+    if (!_isInitialized) {
+      _isInitialized = true;
+      _initializeImportFlow();
+    }
   }
 
   /// 取り込みフローを初期化
