@@ -1,22 +1,22 @@
 # α Import Utility
 
-> [!TIP]
-> **🌐 English version is available: [Readme_English.md](Readme_English.md)**
+<img src="https://github.com/user-attachments/assets/9ac38a04-7607-41b0-8cef-2d5fab8d0d43" alt="α Import Utility のメイン画面。Sony α のイメージカラーであるオレンジをアクセントにした黒基調の UI で、3つのインポートモードを表示している。" width="600"><br>
 
-<img src="docs/images/hero.png" alt="α Import Utility のメイン画面。Sony α のイメージカラーであるオレンジをアクセントにした黒基調の UI で、3つのインポートモードを表示している。" width="600"><br>
+> [!TIP]  
+> **🌐 English version is available: [Readme_English.md](Readme_English.md)**
 
 **Sony α カメラやその SD カードから、未取り込みの写真・動画を PC に安全に取り込むデスクトップアプリです。α6700 にて検証しています。**
 
-> [!IMPORTANT]
+> [!IMPORTANT]  
 > **このアプリは、カメラで撮った写真を1枚も余すことなく、丸ごとバックアップするためのソフトウェアです。**  
 > 整理や編集は写真管理ソフトで行えばよいのです。このアプリは「カメラで撮ったデータを、ブレているものも含めて、とりあえず PC に確実に保存する」ことに特化しています。  
 > 意図せず取り込まれずに失われた写真が一切出ないようにする、それが最も重要な設計目標です。
 
-> [!WARNING]
+> [!WARNING]  
 > **このアプリは Sony 公式のものではなく、個人が開発した非公式のソフトウェアです。**  
 > 非常に慎重に設計してはいますが、**利用は自己の責任のもとでお願いします。**  
 
-> [!WARNING]
+> [!WARNING]  
 > **動作確認は Sony α6700 のみで行っています。**  
 > 同世代の Sony α カメラ（XAVC S 形式の動画を記録する機種）であれば動作する可能性が高いですが、AVCHD 形式のみに対応した旧機種など、古いカメラでは正常に動作しない可能性があります。  
 > もし他の機種で動作確認された方がいれば、Issue で報告いただけると助かります。
@@ -153,7 +153,7 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 | 動画メタデータ | `.XML` | `PRIVATE/M4ROOT/CLIP/` |
 | プロキシー動画 | `.MP4` | `PRIVATE/M4ROOT/SUB/` |
 
-> [!NOTE]
+> [!NOTE]  
 > 動画メタデータ（XML）とプロキシー動画の取り込みは、設定でオン/オフを切り替えられます。
 
 ## Installation
@@ -168,19 +168,19 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 
 ### Windows での起動
 
-<img src="docs/images/windows-folder.png" alt="Windows でのフォルダ構成。α Import Utility.exe が表示されている。" width="500"><br>
+<img src="https://github.com/user-attachments/assets/7d2d368b-c5b0-4c40-ba5c-40e744737802" alt="Windows でのフォルダ構成。α Import Utility.exe が表示されている。" width="600"><br>
 
 1. 展開したフォルダを任意のフォルダに移動します。`C:\Applications\α Import Utility` など、Program Files 以外のフォルダへの展開を推奨します。
 2. `α Import Utility.exe` をダブルクリックして起動します。
 
 ### macOS での起動
 
-<img src="docs/images/macos-folder.png" alt="macOS でのフォルダ構成。" width="500"><br>
+<img src="https://github.com/user-attachments/assets/16fc80cc-6e5f-4a37-9c2f-613693674d5a" alt="macOS でのフォルダ構成。" width="450"><br>
 
 1. 展開して表示された `α Import Utility.app` を `Applications` フォルダにドラッグ＆ドロップします。
 2. 初回起動時は以下の手順で、Gatekeeper のセキュリティ警告を回避する必要があります。
 
-> [!WARNING]
+> [!WARNING]  
 > **macOS 14 Sequoia 以降では、未署名アプリに対するセキュリティが強化されています。**  
 > 初回起動時に「開発元が検証できないため開けません」「悪質なソフトウェアであるかどうかを Apple では確認できないため、このソフトウェアは開けません」と表示される場合があります。
 > 
@@ -201,7 +201,8 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 
 #### 基本設定
 
-<img src="docs/images/settings-basic.png" alt="設定画面の基本設定タブ。" width="500"><br>
+<img src="https://github.com/user-attachments/assets/9a3a19b4-75da-4c32-a287-77c17644f359" width="49%">
+<img src="https://github.com/user-attachments/assets/3ca7c996-1db2-4c09-8300-f9eafb00802c" width="49%"><br>
 
 | 設定項目 | 説明 |
 |----------|------|
@@ -213,7 +214,8 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 
 #### 取り込みオプション
 
-<img src="docs/images/settings-options.png" alt="設定画面の取り込みオプションタブ。" width="500"><br>
+<img src="https://github.com/user-attachments/assets/d525d2d5-1cab-4ee2-be5c-50524934ff46" width="49%">
+<img src="https://github.com/user-attachments/assets/4bcf1637-3d56-4d7a-9661-5148d56f5275" width="49%"><br>
 
 | 設定項目 | 説明 | デフォルト |
 |----------|------|-----------|
@@ -224,55 +226,70 @@ macOS 版はすでに配布終了してしまっていますし、Windows 版も
 
 ### 2. デバイスの接続
 
-<img src="docs/images/device-detected.png" alt="SD カードが検出され、メイン画面にデバイスカードとして表示されている様子。デバイス名、容量情報が表示されている。" width="600"><br>
+<img src="https://github.com/user-attachments/assets/04c11b9f-34ad-4869-a2a2-5e2e8f19642e" alt="SD カードが検出され、メイン画面にデバイスカードとして表示されている様子。デバイス名、容量情報が表示されている。" width="600"><br>
 
 カメラを USB ケーブルで接続するか、SD カードをカードリーダーに挿入すると、自動的に検出されてメイン画面に表示されます。
 
 ### 3. 取り込みの開始
 
-検出されたデバイスのカードをクリックすると、取り込みが開始されます。
+<img src="https://github.com/user-attachments/assets/6758fef2-6dea-4cf1-9838-eddcbe23dc9c" width="49%">
+<img src="https://github.com/user-attachments/assets/afcd0eb0-1566-45f8-8682-5bfce16211fe" width="49%"><br>
 
-<img src="docs/images/import-progress.png" alt="取り込み中のダイアログ。現在処理中のファイル名、全体の進捗バー、処理件数が表示されている。" width="450"><br>
+検出されたデバイスのカードをクリックすると、取り込み対象のスキャンが開始されます。
 
-取り込み中はいつでも「キャンセル」ボタンで中断できます。  
-中断時は現在コピー中のファイルが完了してから停止するため、不完全なファイルが残ることはありません。
+> [!NOTE]
+> なるべく高速にスキャンできるよう実装していますが、確実に取り込むためにフルスキャンしている関係で、スキャンにはどうしても時間がかかります。
+
+---
+
+<img src="https://github.com/user-attachments/assets/3057173f-b93a-4492-b9a8-25c31428c236" width="400"><br>
+
+「取り込み前プレビュー」がオンのときは、取り込み前に取り込み対象の一覧を表示します。
+
+---
+
+<img src="https://github.com/user-attachments/assets/a940efc6-3bf1-4009-8d14-8dab5ea7c2ae" width="400"><br>
+
+スキャンが完了すると、DCIM (写真) → PRIVATE/M4ROOT/CLIP (動画) → PRIVATE/M4ROOT/SUB (プロキシー動画) の順に取り込みが実行されます。
+
+> [!TIP]
+> 取り込み中はいつでも「キャンセル」ボタンで中断できます。  
+> 中断時は現在コピー中のファイルが完了してから停止するため、不完全なファイルが残ることはありません。
+
+> [!NOTE]
+> 本当は EOS Utility のように取り込み中写真のプレビューも実装したかったのですが、プレビューを実装するとファイル I/O の関係上取り込み速度が遅くなることが判明したため諦めました・・・。
 
 ### 4. 取り込み完了
 
-<img src="docs/images/import-complete.png" alt="取り込み完了ダイアログ。成功件数、スキップ件数、警告件数、処理時間が表示されている。" width="450"><br>
+<img src="https://github.com/user-attachments/assets/c442e8c2-6bfc-4ab0-93ce-4244527a5cd8" width="49%">
+<img src="https://github.com/user-attachments/assets/733f2acd-be5f-4b10-9ce6-d0e63b0f0357" width="49%"><br>
 
 取り込みが完了すると、結果のサマリーが表示されます。  
-「保存先を開く」ボタンで保存先フォルダを直接開くことができます。
+「保存先を開く」ボタンをクリックすると、保存先フォルダを直接開けます。
 
 ## Import Methods
 
 ### カメラから取り込み
 
-<img src="docs/images/import-camera.png" alt="カメラから取り込みセクション。USB 接続されたカメラが検出されている様子。" width="600"><br>
-
 USB ケーブルでカメラを PC に接続し、USB マスストレージ (MSC) モードで認識させます。  
 カメラが検出されると「カメラから取り込み」セクションに表示されます。
 
-> ![WARNING]
+> [!WARNING]  
 > **MTP (Media Transfer Protocol) モードでの接続には対応していません。**  
 > **必ず USB マスストレージ (MSC) モードで接続してください。**
 
 ### SD カードから取り込み
-
-<img src="docs/images/import-sdcard.png" alt="SD カードから取り込みセクション。SD カードが検出されている様子。" width="600"><br>
 
 SD カードをカードリーダー経由で PC に接続します。  
 SD カードが検出されると「SD カードから取り込み」セクションに表示されます。
 
 ### フォルダから取り込み
 
-<img src="docs/images/import-folder.png" alt="フォルダから取り込みセクション。フォルダ選択ボタンが表示されている様子。" width="600"><br>
-
 「フォルダを選択...」をクリックして、SD カードの構造を維持したままのバックアップフォルダを直接指定できます。  
 もちろん、内蔵ストレージだけでなく、USB SSD や USB メモリ上のフォルダにも対応しています。  
 過去の SD カードのバックアップからの再取り込みに便利です。
 
-> [!WARNING]
+> [!WARNING]  
 > **Sony α の SD カード構造として認識できないフォルダは取り込みできません。**  
 > 必ず `DCIM/` と `PRIVATE/M4ROOT/CLIP/` が存在する SD カードのルートフォルダを指定してください。
 
@@ -318,7 +335,7 @@ SD_CARD_ROOT/
 取り込み元ファイルの作成日時・更新日時と EXIF 側の撮影日時が近い場合には元ファイルの作成日時・更新日時をそのまま保持し、大きく異なる場合には EXIF の撮影日時を採用します。  
 タイムゾーンについては、EXIF にタイムゾーン情報が記録されていればその情報を採用し、記録されていない場合は設定で指定したカメラタイムゾーンを利用します。
 
-> [!TIP]
+> [!TIP]  
 > α6700 v2.0 では EXIF v2.3.2 仕様に基づき、カメラで設定したタイムゾーン情報が適切に EXIF に記録されていることを確認しています。  
 > おそらく同世代のカメラでも同様ではないでしょうか。  
 > 古いカメラの場合は EXIF 仕様上、タイムゾーンが記録されていない可能性がありますのでご注意ください。
