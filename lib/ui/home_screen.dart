@@ -7,6 +7,7 @@ library;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../app.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../models/settings.dart';
 import '../services/device_detector.dart';
@@ -136,6 +137,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// 設定画面を開く
   Future<void> _openSettings() async {
+    final previousLanguage = _settings?.language;
+
     final result = await showDialog<ImportSettings>(
       context: context,
       builder: (context) => SettingsDialog(settings: _settings!),
@@ -146,6 +149,11 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _settings = result;
       });
+
+      // 言語設定が変更された場合のみロケールを更新
+      if (previousLanguage != result.language) {
+        AlphaImportUtilityApp.updateLocale(result.language.locale);
+      }
     }
   }
 

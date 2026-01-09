@@ -7,7 +7,6 @@ library;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../app.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../models/settings.dart';
 import '../services/logging_service.dart';
@@ -104,18 +103,8 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
   }
 
   /// キャンセル時の処理
-  ///
-  /// 言語が変更されていた場合は元の言語に戻す。
   void _handleCancel() {
-    _restoreLanguageIfNeeded();
     Navigator.pop(context);
-  }
-
-  /// 言語が変更されていた場合は元の言語に戻す
-  void _restoreLanguageIfNeeded() {
-    if (_settings.language != _originalSettings.language) {
-      AlphaImportUtilityApp.updateLocale(_originalSettings.language.locale);
-    }
   }
 
   /// 保存先フォルダを選択
@@ -149,13 +138,7 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
 
-    return PopScope(
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) {
-          _restoreLanguageIfNeeded();
-        }
-      },
-      child: Dialog(
+    return Dialog(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560, maxHeight: 600),
           child: Column(
@@ -218,7 +201,6 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
             ],
           ),
         ),
-      ),
     );
   }
 
@@ -400,6 +382,10 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
   }
 
   /// 言語設定を構築
+  ///
+  /// 言語選択を変更しても即座にはロケールを変更せず、保存ボタン押下時に
+  /// 呼び出し元でロケールを変更する。これにより、キャンセル時に元の言語に
+  /// 戻す処理が不要になり、UI の一貫性が保たれる。
   Widget _buildLanguageSettings(AppLocalizations l10n) {
     return DropdownButtonFormField<AppLanguage>(
       initialValue: _settings.language,
@@ -409,7 +395,7 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
       items: AppLanguage.values.map((lang) {
         return DropdownMenuItem(
           value: lang,
-          child: Text(_getLanguageName(l10n, lang)),
+          child: Text(_getLanguageName(lang)),
         );
       }).toList(),
       onChanged: (value) {
@@ -417,20 +403,22 @@ class _SettingsDialogState extends State<SettingsDialog> with SingleTickerProvid
           setState(() {
             _settings = _settings.copyWith(language: value);
           });
-          // 即座にロケールを変更
-          AlphaImportUtilityApp.updateLocale(value.locale);
         }
       },
     );
   }
 
-  /// 言語の表示名をローカライズして取得
-  String _getLanguageName(AppLocalizations l10n, AppLanguage language) {
+  /// 言語の表示名を取得
+  ///
+  /// 言語選択肢はローカライズせず、常にその言語のネイティブ名を表示する。
+  /// これにより、ユーザーが誤って別の言語に変更してしまった場合でも、
+  /// 元の言語に戻しやすくなる。
+  String _getLanguageName(AppLanguage language) {
     switch (language) {
       case AppLanguage.Japanese:
-        return l10n.settings_language_option_japanese;
+        return '日本語';
       case AppLanguage.English:
-        return l10n.settings_language_option_english;
+        return 'English';
     }
   }
 
