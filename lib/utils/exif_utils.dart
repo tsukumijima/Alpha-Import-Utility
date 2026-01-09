@@ -13,7 +13,19 @@ import 'package:xml/xml.dart';
 import 'timezone_utils.dart';
 
 /// 動画 XML のキャッシュ
+///
+/// 各ディレクトリパスをキーとして、動画ファイル名から XML ファイルへのマッピングを保持する。
+/// このキャッシュはアプリのライフタイム全体で保持されるため、SD カードの切り替え時などに
+/// [clearVideoXmlCache] を呼び出してクリアする必要がある。
 final Map<String, Map<String, File?>> _videoXmlCacheByDirectory = {};
+
+/// 動画 XML キャッシュをクリアする
+///
+/// SD カードの切り替え時や取り込み処理の完了時に呼び出すことで、
+/// 古いキャッシュによるメモリリークを防止する。
+void clearVideoXmlCache() {
+  _videoXmlCacheByDirectory.clear();
+}
 
 /// EXIF から読み取った日時情報
 class ExifDateTime {

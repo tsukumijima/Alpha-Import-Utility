@@ -14,6 +14,7 @@ import '../l10n/generated/app_localizations.dart';
 import '../models/import_result.dart';
 import '../models/media_file.dart';
 import '../models/settings.dart';
+import '../utils/exif_utils.dart';
 import '../utils/file_utils.dart';
 import '../utils/hash_utils.dart';
 import 'logging_service.dart';
@@ -298,8 +299,9 @@ class ImportEngine {
 
       stopwatch.stop();
 
-      // 取り込み完了時に累計バイト数をリセット
+      // 取り込み完了時に累計バイト数と動画 XML キャッシュをリセット
       StreamingCopyWithHash.resetPendingBytes();
+      clearVideoXmlCache();
 
       _log.logImportCompleted(successCount, skippedCount, errorCount, stopwatch.elapsed);
 
@@ -315,8 +317,9 @@ class ImportEngine {
     } catch (ex, stackTrace) {
       stopwatch.stop();
 
-      // エラー発生時も累計バイト数をリセット
+      // エラー発生時も累計バイト数と動画 XML キャッシュをリセット
       StreamingCopyWithHash.resetPendingBytes();
+      clearVideoXmlCache();
 
       _log.error('Import failed.', tag: 'ImportEngine', error: ex, stackTrace: stackTrace);
       final errorMessage = resolveFatalErrorMessage(ex, _l10n);
