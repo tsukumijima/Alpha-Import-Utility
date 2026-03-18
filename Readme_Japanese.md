@@ -3,7 +3,7 @@
 <img src="https://github.com/user-attachments/assets/9ac38a04-7607-41b0-8cef-2d5fab8d0d43" alt="α Import Utility のメイン画面。Sony α のイメージカラーであるオレンジをアクセントにした黒基調の UI で、3つのインポートモードを表示している。" width="600"><br>
 
 > [!TIP]  
-> **🌐 English version is available: [Readme_English.md](Readme_English.md)**
+> **🌐 English version is available: [Readme.md](Readme.md)**
 
 **Sony α カメラやその SD カードから、未取り込みの写真・動画を PC に安全に取り込むデスクトップアプリです。α6700 にて検証しています。**
 

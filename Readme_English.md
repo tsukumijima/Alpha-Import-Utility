@@ -3,7 +3,7 @@
 <img src="https://github.com/user-attachments/assets/4627d06a-d488-4550-9e9f-b64424cd4b5c" alt="Main screen of α Import Utility. A dark-themed UI with Sony α's signature orange accent color, showing three import modes." width="600"><br>
 
 > [!TIP]  
-> **🌐 日本語版はこちら: [Readme.md](Readme.md)**
+> **🇯🇵 日本語版 README はこちら: [Readme_Japanese.md](Readme_Japanese.md)**
 
 **A desktop application for safely importing un-imported photos and videos from Sony α cameras or their SD cards to your PC. Verified with the α6700.**
 
